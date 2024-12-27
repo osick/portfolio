@@ -53,23 +53,32 @@ if __name__ == "__main__":
     **DATE**: Buying Day (no Time or timezone Info nescessary)  
     **SYMBOL**: The symbol of the share  
     """
-    c1, c2 = st.columns([3,8], border=False, gap="small")
 
-    with c1:
-        st.title("Portfolio Viewer")
-        with st.popover("Help"): st.markdown(help)
-        uploaded_file = st.file_uploader("Upload a CSV file", type="csv")
+    st.title("Portfolio Viewer")
+    with st.sidebar:
+
+        uploaded_file = st.file_uploader("Upload Portfolio as CSV", type=["csv"])
+        with open("portfolio.sample.csv","r") as fh: 
+            text_contents=fh.read()
+
+        st.divider()
+        with st.popover("Help", ): 
+            st.download_button(
+                label="Download Sample File", 
+                data=text_contents, 
+                file_name="portfolio.sample.csv")
+            st.markdown(help)
 
     if uploaded_file:
         with st.spinner("Computing the Portfolio Chart..."):
             portfolio = get_portfolio(uploaded_file)
-            with c2:
-                st.title("Portfolio History")
-                st.dataframe(portfolio, use_container_width= True)
+            st.header("Data")
+            st.dataframe(portfolio, use_container_width= True)
             symbols={s:[] for s in list(set(list(portfolio["SYMBOL"])))}
 
             today = datetime.now()
-            ex_df = get_exchange_rates("2000-10-31",today)
+            # portfolio.index[0] is the first date of the portfolio
+            ex_df = get_exchange_rates(portfolio.index[0],today)
 
             fig = go.Figure()    
 
@@ -105,7 +114,7 @@ if __name__ == "__main__":
             fig.add_trace(go.Scatter(x=df_combined.index, y=df_combined[f'_win'], mode='lines', name=f"Win"))
 
 
-            st.header("History Chart")
+            st.header("History")
             # Update graph layout
             fig.update_layout(title="", xaxis_title="Date", yaxis_title="EUR", template="plotly_dark", height=800)
             fig.update_layout(yaxis_range=[0,df_combined["_close"].max()])
