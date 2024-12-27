@@ -20,7 +20,6 @@ def get_portfolio(csvfile):
 def get_exchange_rates(start,end):
     rates = ['USDEUR=X', 'GBPEUR=X']
     tickers = yf.Tickers(' '.join(rates))
-    start = '2022-10-31'
     exchange_rates = []
     for i in tickers.tickers: exchange_rates.append(tickers.tickers[i].history(start=start, end=today).Close)
     ex_df = pd.DataFrame(exchange_rates).T
@@ -70,7 +69,7 @@ if __name__ == "__main__":
             symbols={s:[] for s in list(set(list(portfolio["SYMBOL"])))}
 
             today = datetime.now()
-            ex_df = get_exchange_rates("2022-10-31",today)
+            ex_df = get_exchange_rates("2000-10-31",today)
 
             fig = go.Figure()    
 
