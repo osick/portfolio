@@ -5,13 +5,19 @@
 Simple proof of concept of a Portfolio app to monitor and view the history of a portfilio.
 
 ## Usage
+1. Install required Python Libs (or better first activate an environment)
 ```bash
 foo@bar:~$ pip install .
 ```
-Then
+2. Start the app
 
 ```bash
 foo@bar:~$ streamlit run app.py
+```
+
+3. Open the streamlit address  
+```
+http://localhost:8501
 ```
 
 ## Input für Portfolio
