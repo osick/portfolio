@@ -28,12 +28,7 @@ def get_exchange_rates(start,end):
     ex_df.index = ex_df.index.tz_localize(None)
     return ex_df
 
-if __name__ == "__main__":
-    st.set_page_config(layout="wide")
-
-    # Streamlit App
-
-    # Upload CSV File
+def add_help():
     help ="""
     ##### Structure of the CSV file  
     | NAME      | ISIN         | AMOUNT | BUY  | DATE       | SYMBOL | 
@@ -53,28 +48,40 @@ if __name__ == "__main__":
     **DATE**: Buying Day (no Time or timezone Info nescessary)  
     **SYMBOL**: The symbol of the share  
     """
+    st.divider()
+    with st.popover("Help"): 
+        st.markdown(help)
 
+
+if __name__ == "__main__":
+    st.set_page_config(layout="wide")
     st.title("Portfolio Viewer")
-    with st.sidebar:
+    data_tab, history_tab, forecast_tab = st.tabs(["Portfolio Data 🗃", "Hístory 📈","Forecast"])
+    with data_tab:
+        st.header("Data")
+    with history_tab:
+        st.header("History")
+    with forecast_tab:
+        st.header("Forecast and Recommendation")
 
-        uploaded_file = st.file_uploader("Upload Portfolio as CSV", type=["csv"])
+    # Upload CSV File
+    with st.sidebar:
+        st.subheader("Upload Portfolio as CSV")
+        uploaded_file = st.file_uploader("", type=["csv"])
         with open("portfolio.sample.csv","r") as fh: 
             text_contents=fh.read()
-
-        st.divider()
-        with st.popover("Help", ): 
-            st.download_button(
-                label="Download Sample File", 
-                data=text_contents, 
-                file_name="portfolio.sample.csv")
-            st.markdown(help)
 
     if uploaded_file:
         with st.spinner("Computing the Portfolio Chart..."):
             portfolio = get_portfolio(uploaded_file)
-            st.header("Data")
-            st.dataframe(portfolio, use_container_width= True)
+            with data_tab:
+                st.dataframe(portfolio, use_container_width= True, )
+            with st.sidebar:
+                st.divider()
+                st.subheader("Select Portfolio symbols")
+                data_frame = st.dataframe(list(set(portfolio["SYMBOL"])), hide_index=True, use_container_width= True, on_select="rerun", selection_mode="multi-row")
             symbols={s:[] for s in list(set(list(portfolio["SYMBOL"])))}
+            options=list(symbols.keys())
 
             today = datetime.now()
             # portfolio.index[0] is the first date of the portfolio
@@ -113,10 +120,13 @@ if __name__ == "__main__":
             fig.add_trace(go.Scatter(x=df_combined.index, y=df_combined[f'_buy'], mode='lines', name=f"Buy"))
             fig.add_trace(go.Scatter(x=df_combined.index, y=df_combined[f'_win'], mode='lines', name=f"Win"))
 
-
-            st.header("History")
             # Update graph layout
             fig.update_layout(title="", xaxis_title="Date", yaxis_title="EUR", template="plotly_dark", height=800)
             fig.update_layout(yaxis_range=[0,df_combined["_close"].max()])
             # Display graph
-            st.plotly_chart(fig,use_container_width=True,height=800)
+            with history_tab:
+                st.plotly_chart(fig,use_container_width=True,height=800)
+            with forecast_tab:
+                st.write("tbd")
+    with st.sidebar:
+        add_help()
