@@ -5,8 +5,14 @@
 Simple proof of concept of a Portfolio app to monitor and view the history of a portfilio.
 
 ## Usage
+```bash
+foo@bar:~$ pip install .
+```
+Then
 
-    $> streamlit run app.py
+```bash
+foo@bar:~$ streamlit run app.py
+```
 
 ## Input für Portfolio
 
