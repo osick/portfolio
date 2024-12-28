@@ -56,7 +56,6 @@ def add_help():
     **DATE**: Buying Day (no Time or timezone Info nescessary)  
     **SYMBOL**: The symbol of the share  
     """
-    st.divider()
     with st.popover("Help"): 
         st.markdown(help)
 
@@ -119,7 +118,7 @@ def make_portfolio_fig(df_combined,  indicators=[], interval=90):
     try:
         fig = make_subplots(specs=[[{"secondary_y": True}]])  
         fig.update_layout(legend=dict(y=1.1, orientation='h'))
-        fig.update_layout(legend=dict(x=0, y=1.2, title_font_family="Times New Roman", font=dict( family="Courier", size=12, color="#404040"), bordercolor="Black", borderwidth=0)) 
+        fig.update_layout(legend=dict(x=0, y=1.1, title_font_family="Times New Roman", font=dict( family="Courier", size=12, color="#404040"), bordercolor="Black", borderwidth=0)) 
         fig.add_trace(go.Scatter(x=df_combined.index, y=df_combined[f'_buy'], mode='lines',  name=f"Buy", line=dict(color="#ffe490"), fill="tonexty",  ), secondary_y=False,)
         fig.add_trace(go.Scatter(x=df_combined.index, y=df_combined[f'_close'], line=dict(color="#a0ff90"),  fill="tonexty",  mode='lines', name=f"Win" ), secondary_y=False,)
 
@@ -144,23 +143,28 @@ def make_portfolio_fig(df_combined,  indicators=[], interval=90):
 if __name__ == "__main__":
 
     st.set_page_config(layout="wide")
-    st.title("Portfolio")
-    data_tab, history_tab, forecast_tab = st.tabs([" | Portfolio Data ", " | Hístory "," | Forecast"])
+    st.header("Portfolio")
+    data_tab, history_tab, forecast_tab = st.tabs([" | Basic Data ", " | Hístory "," | Forecast"])
     with data_tab:      pass #st.header("Data")
     with history_tab:   pass #st.header("History")
     with forecast_tab:  st.header("Forecast and Recommendation")
 
     # Upload CSV File
     with st.sidebar:
-        st.markdown("""<style>.block-container {padding-top: 2rem; padding-bottom: 1rem;}</style>""", unsafe_allow_html=True, )
-        st.title("Config")
+        st.markdown("""<style>.block-container {padding-top: 2.5rem; padding-bottom: 1rem;}</style>""", unsafe_allow_html=True, )
+        #st.title("Config")
         css = '''
             <style>
                 [data-testid='stFileUploader'] section > input + div {display:none;}
                 [data-testid='stFileUploader'] section + div {float: right; padding: 0;display:none;}
+                [data-testid='stSidebarHeader'] {float: right; padding: 0;display:none ;}
+        
+                .stTextInput > span {font-size:60%;  font-weight:bold; color:blue;}
+                .stMultiSelect > span {font-size:60%; font-weight:bold; color:blue;} 
+
             </style>'''
         st.markdown(css, unsafe_allow_html=True)
-        upl_file = st.file_uploader(":red[**1.Upload Portfolio as CSV**]", type=["csv"])
+        upl_file = st.file_uploader(":blue[**1.Upload Portfolio**]", type=["csv"])
 
     if upl_file:
         with st.spinner("Your Shares..."):
@@ -172,32 +176,54 @@ if __name__ == "__main__":
             with data_tab:
                 st.dataframe(portfolio, use_container_width= True, )
             with history_tab:
-                share_selector = st.button("LOAD!")
+                pass
             with st.sidebar:
-                st.write()
+                st.markdown(
+                    """
+                    <style> 
+                        span[data-baseweb="tag"] {background-color: #e0e0e0 !important; color: #000000 !important; font-size:90%;padding:5px; width:6rem}
+                    </style>
+                    """,
+                    unsafe_allow_html=True,
+                )
+
                 lst_indicators =["% Performance", "% SMA", "% EMA", "% BB", "Performance", "SMA", "EMA", "BB"]
                 lst_portfolio = list(set(portfolio["SYMBOL"]))
-                st.markdown(f"{upl_file.name}")
-                st.markdown(f":red[**2.Select Symbols**]")
-                data_frame = st.dataframe(pd.DataFrame({"Symbol":lst_portfolio}), hide_index=True, use_container_width= True, on_select="rerun", selection_mode="multi-row", height=100)
-                selected_shares = [lst_portfolio[v] for i,v in  enumerate(data_frame.selection.rows)]
-                indicators = st.multiselect(":red[**3.Select Indicators**]", lst_indicators , default=[], key="indicators")
+                data_frame = st.multiselect(f":blue[**2.Select Symbols from {upl_file.name}**]", lst_portfolio, default=lst_portfolio)
+                selected_shares = data_frame
+                indicators = st.multiselect(":blue[**3.Select Indicators**]", lst_indicators , default=[], key="indicators", format_func=lambda x: str(x))
+                interval = st.slider(label=":blue[**4.Set Interval for indicators**]",min_value=1, max_value=365, value=60,  key="interval")
+                share_selector = st.button("Load Data into Chart", use_container_width=True, type="primary")
 
         if share_selector:
             with st.spinner("compute Portfolio history..."):
+
+                # specific Stock Data 
                 df_combined, symbols = get_history(portfolio, ex_df)
                 symbols = {s:i for s,i in symbols.items() if s in selected_shares}
-
-                interval=90                
+                #interval=90                
                 df_combined =  refine_for_symbols(df_combined, symbols, interval)
-                fig = make_portfolio_fig(df_combined, indicators=indicators, interval=interval)
-                
-                # Display graph
-                with history_tab:
-                    st.markdown(f'for **{"**, **".join(list(symbols.keys()))}** in Portfolio')
 
-                    st.plotly_chart(fig,use_container_width=True,height=800)
+                # Display graph
+                fig = make_portfolio_fig(df_combined, indicators=indicators, interval=interval)
+                with history_tab:
+                    PLOT_BGCOLOR = "#ffffff"
+                    st.markdown(
+                        f"""
+                        <style>
+                        .stPlotlyChart {{
+                        border-radius: 6px;
+                        box-shadow: 0 8px 12px 0 rgba(0, 0, 0, 0.20), 0 6px 20px 0 rgba(0, 0, 0, 0.30);
+                        }}
+                        </style>
+                        """, unsafe_allow_html=True
+                    )
+                    fig.update_layout(title=f'                  History Graph for {", ".join(list(symbols.keys()))}')
+                    fig.update_layout(paper_bgcolor=PLOT_BGCOLOR)
+                    st.plotly_chart(fig,use_container_width=True,height=800, theme="streamlit")
+                
+                # Analysis and prognosis
                 with forecast_tab:
                     st.write("tbd")
-    with st.sidebar:
-        add_help()
+    with st.sidebar:    
+            add_help()
