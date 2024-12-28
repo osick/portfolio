@@ -114,111 +114,88 @@ def refine_for_symbols(df_combined, symbols,interval):
         st.error(f"cannot refine for symbols{symbols}. Error:{e}")
         return df_combined
 
-if __name__ == "__main__":
-    st.set_page_config(layout="wide")
-    st.title("Portfolio Viewer")
+@st.cache_data
+def make_portfolio_fig(df_combined,  indicators=[], interval=90):
+    try:
+        fig = make_subplots(specs=[[{"secondary_y": True}]])  
+        fig.update_layout(legend=dict(y=1.1, orientation='h'))
+        fig.update_layout(legend=dict(x=0, y=1.2, title_font_family="Times New Roman", font=dict( family="Courier", size=12, color="#404040"), bordercolor="Black", borderwidth=0)) 
+        fig.add_trace(go.Scatter(x=df_combined.index, y=df_combined[f'_buy'], mode='lines',  name=f"Buy", line=dict(color="#ffe490"), fill="tonexty",  ), secondary_y=False,)
+        fig.add_trace(go.Scatter(x=df_combined.index, y=df_combined[f'_close'], line=dict(color="#a0ff90"),  fill="tonexty",  mode='lines', name=f"Win" ), secondary_y=False,)
 
+        if "% Performane" in indicators:
+            fig.add_trace(go.Scatter( x=df_combined.index,  y=df_combined[f'performance'],  mode='lines',  name=f"Win Performance in %" ), secondary_y=True,)
+        if "% SMA" in indicators:
+            fig.add_trace(go.Scatter(x=df_combined.index, y=df_combined[f'sma'], mode='lines', name=f"% Performance SMA ({interval}d)" ), secondary_y=True,)
+        if "% EMA" in indicators:
+            fig.add_trace(go.Scatter( x=df_combined.index, y=df_combined[f'ema'],  mode='lines',  name=f"% Performance EMA ({interval}d)" ), secondary_y=True,)
+        if "% BB" in indicators:
+            fig.add_trace(go.Scatter( x=df_combined.index,  y=df_combined["bb_lower"], mode='lines', name=f"% BB_lower ({interval}d)"), secondary_y=True,)
+            fig.add_trace(go.Scatter( x=df_combined.index,  y=df_combined["bb_upper"], mode='lines',  name=f"% BB_upper ({interval}d)"), secondary_y=True,)
+        
+        fig.update_xaxes(title_text="<b>History</b>")
+        fig.update_yaxes(title_text="<b>EUR</b>", secondary_y=False, tickprefix='€', range=[0, df_combined[f'_close'].max()*1.2])
+        fig.update_yaxes(title_text="<b>Yield in %</b>", secondary_y=True, tickformat=".0%", range=[0, df_combined[f'performance'].max()*1.1])
+        return fig
+    except Exception as e:
+        st.error("cannof create figure for Portfolio, Error:{e}")
+        return make_subplots(specs=[[{"secondary_y": True}]])  
+
+if __name__ == "__main__":
+
+    st.set_page_config(layout="wide")
+    st.title("Portfolio")
     data_tab, history_tab, forecast_tab = st.tabs([" | Portfolio Data ", " | Hístory "," | Forecast"])
-    with data_tab:
-        st.header("Data")
-    with history_tab:
-        st.header("History")
-    with forecast_tab:
-        st.header("Forecast and Recommendation")
+    with data_tab:      pass #st.header("Data")
+    with history_tab:   pass #st.header("History")
+    with forecast_tab:  st.header("Forecast and Recommendation")
 
     # Upload CSV File
     with st.sidebar:
-        uploaded_file = st.file_uploader("Upload Portfolio as CSV", type=["csv"])
-        with open("portfolio.sample.csv","r") as fh: text_contents=fh.read()
+        st.markdown("""<style>.block-container {padding-top: 2rem; padding-bottom: 1rem;}</style>""", unsafe_allow_html=True, )
+        st.title("Config")
+        css = '''
+            <style>
+                [data-testid='stFileUploader'] section > input + div {display:none;}
+                [data-testid='stFileUploader'] section + div {float: right; padding: 0;display:none;}
+            </style>'''
+        st.markdown(css, unsafe_allow_html=True)
+        upl_file = st.file_uploader(":red[**1.Upload Portfolio as CSV**]", type=["csv"])
 
-    if uploaded_file:
+    if upl_file:
         with st.spinner("Your Shares..."):
-            portfolio = get_portfolio(uploaded_file)
+            portfolio = get_portfolio(upl_file)
             today = datetime.now()
             begin = portfolio.index[0]
             ex_df = get_exchange_rates(begin,today)
             
             with data_tab:
                 st.dataframe(portfolio, use_container_width= True, )
+            with history_tab:
+                share_selector = st.button("LOAD!")
             with st.sidebar:
-                share_selector = st.button("load symbols")
+                st.write()
+                lst_indicators =["% Performance", "% SMA", "% EMA", "% BB", "Performance", "SMA", "EMA", "BB"]
                 lst_portfolio = list(set(portfolio["SYMBOL"]))
-                data_frame = st.dataframe(pd.DataFrame(lst_portfolio), hide_index=True, use_container_width= True, on_select="rerun", selection_mode="multi-row", )
+                st.markdown(f"{upl_file.name}")
+                st.markdown(f":red[**2.Select Symbols**]")
+                data_frame = st.dataframe(pd.DataFrame({"Symbol":lst_portfolio}), hide_index=True, use_container_width= True, on_select="rerun", selection_mode="multi-row", height=100)
                 selected_shares = [lst_portfolio[v] for i,v in  enumerate(data_frame.selection.rows)]
+                indicators = st.multiselect(":red[**3.Select Indicators**]", lst_indicators , default=[], key="indicators")
 
         if share_selector:
             with st.spinner("compute Portfolio history..."):
-                
                 df_combined, symbols = get_history(portfolio, ex_df)
                 symbols = {s:i for s,i in symbols.items() if s in selected_shares}
-                interval=90
+
+                interval=90                
                 df_combined =  refine_for_symbols(df_combined, symbols, interval)
-
-                fig = make_subplots(specs=[[{"secondary_y": True}]])  
-                fig.update_layout(legend=dict(y=1.1, orientation='h'))
-                fig.update_layout(legend=dict(x=0, y=1.2, title_font_family="Times New Roman", font=dict( family="Courier", size=12, color="#404040"), bordercolor="Black", borderwidth=0)) 
-
-                fig.add_trace(go.Scatter(
-                    x=df_combined.index, 
-                    y=df_combined[f'_buy'], 
-                    mode='lines', 
-                    name=f"Buy",
-                    line=dict(color="#ffe490"), 
-                    fill="tonexty", 
-                    ), secondary_y=False,)
-
-                fig.add_trace(go.Scatter(
-                    x=df_combined.index, 
-                    y=df_combined[f'_close'], 
-                    line=dict(color="#a0ff90"), 
-                    fill="tonexty", 
-                    mode='lines', 
-                    name=f"Win"
-                    ), secondary_y=False,)
-
-                fig.add_trace(go.Scatter(
-                    x=df_combined.index, 
-                    y=df_combined[f'performance'], 
-                    mode='lines', 
-                    name=f"Win Performance in %"
-                    ), secondary_y=True,)
+                fig = make_portfolio_fig(df_combined, indicators=indicators, interval=interval)
                 
-                fig.add_trace(go.Scatter(
-                    x=df_combined.index, 
-                    y=df_combined[f'sma'], 
-                    mode='lines', 
-                    name=f"% Performance SMA ({interval}d)"
-                    ), secondary_y=True,)
-                
-                
-                fig.add_trace(go.Scatter(
-                    x=df_combined.index, 
-                    y=df_combined[f'ema'], 
-                    mode='lines', 
-                    name=f"% Performance EMA ({interval}d)"
-                    ), secondary_y=True,)
-
-                fig.add_trace(go.Scatter(
-                    x=df_combined.index, 
-                    y=df_combined["bb_lower"], 
-                    mode='lines', 
-                    name=f"% BB_lower ({interval}d)"
-                    ), secondary_y=True,)
-
-                fig.add_trace(go.Scatter(
-                    x=df_combined.index, 
-                    y=df_combined["bb_upper"], 
-                    mode='lines', 
-                    name=f"% BB_upper ({interval}d)"
-                    ), secondary_y=True,)
-
-
-                fig.update_xaxes(title_text="<b>History</b>")
-                fig.update_yaxes(title_text="<b>EUR</b>", secondary_y=False, tickprefix='€', range=[0, df_combined[f'_close'].max()*1.2])
-                fig.update_yaxes(title_text="<b>Yield in %</b>", secondary_y=True, tickformat=".0%", range=[0, df_combined[f'performance'].max()*1.1])
-
                 # Display graph
                 with history_tab:
+                    st.markdown(f'for **{"**, **".join(list(symbols.keys()))}** in Portfolio')
+
                     st.plotly_chart(fig,use_container_width=True,height=800)
                 with forecast_tab:
                     st.write("tbd")
