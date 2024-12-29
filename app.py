@@ -7,7 +7,7 @@ from plotly.subplots import make_subplots
 from prophet import Prophet
 from datetime import datetime
 
-@st.cache_data
+@st.cache_data(persist="disk")
 def get_portfolio(csvfile):
     try:
         portfolio = pd.read_csv(csvfile, sep=",")
@@ -20,7 +20,7 @@ def get_portfolio(csvfile):
         st.error(f"Portfolio could not be loaded from {csvfile} ")
         return pd.DataFrame()
 
-@st.cache_data
+@st.cache_data(persist="disk")
 def get_exchange_rates(start,end):
     rates = ['USDEUR=X', 'GBPEUR=X']
     try:
@@ -69,6 +69,7 @@ def add_help():
     """
     st.markdown(help)
 
+@st.cache_data(persist="disk")
 def get_history(_portfolio, _exchange_rates):
     df_combined = pd.DataFrame()
     try:
@@ -94,14 +95,14 @@ def get_history(_portfolio, _exchange_rates):
         st.error(f"could not do history analysis on the portfolio: {e}")
         return pd.DataFrame(), {}
 
-@st.cache_data
+@st.cache_data(persist="disk")
 def get_ticker_history(symbol,  start, end):
     df = pd.DataFrame()
     ticker = yf.Ticker(symbol)
     ticker_df = ticker.history(start=start, end=end)
     ticker_df.index = ticker_df.index.tz_localize(None)
     df[f'{symbol}_{start}_close'] = ticker_df["Close"]
-    return df, ticker.info["currency"]
+    return df, ticker.info
 
 def refine_for_symbols(df_combined, symbols,interval):
     try:
@@ -160,7 +161,7 @@ def make_portfolio_fig(df_combined, interval, indicators=[], ):
 if __name__ == "__main__":
 
     st.set_page_config(layout="wide")
-    st.header("Portfolio")
+    st.markdown("## Portfolio")
     data_tab, history_tab, forecast_tab, help_tab = st.tabs([f"**Summary**", "**History**","**Forecast**","**Help**"])
     with data_tab:      pass # st.header("Data")
     with history_tab:   pass # st.header("History")
