@@ -2,3 +2,7 @@ portfolio.csv
 test.py
 finance.py
 nohup.out
+*.log
+__pycache__/
+test/tmp_*.csv
+test/*.log

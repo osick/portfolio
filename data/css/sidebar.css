@@ -1,0 +1,39 @@
+.block-container {
+    padding-top: 2.5rem; padding-bottom: 1rem;
+}
+
+[data-testid='stFileUploader'] * {
+    padding:0;margin:4px;vertical-align:center
+}
+
+[data-testid='stFileUploader'] section > input + div {
+    display:none;
+}
+
+[data-testid='stFileUploader'] section + div {
+    float: right; padding: 0;display:none;
+}
+
+[data-testid='stSidebarHeader'] {
+    float: right; padding: 0;display:visible ;
+}
+
+.stTextInput > span {
+    font-size:60%;  font-weight:bold; color:blue;
+}
+
+.stMultiSelect > span {
+    font-size:60%; font-weight:bold; color:blue;
+} 
+
+.stTabs [data-baseweb="tab"] {
+    height: 20px; white-space: pre-wrap; background-color: #eeeeee; color: #000000; padding: 15px;
+}
+
+.stTabs [aria-selected="true"] {
+    background-color: #404040; color: #ffff00;
+}
+
+span[data-baseweb="tag"] {
+    background-color: #e0e0e0 !important; color: #000000 !important; font-size:90%;padding:8px; width:4.5rem
+}  

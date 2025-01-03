@@ -20,22 +20,26 @@ foo@bar:~$ streamlit run app.py
 http://localhost:8501
 ```
 
+<!--CUT-->
+
 ## Input für Portfolio
 
 ### Structure of the CSV file  
-    | NAME      | ISIN         | AMOUNT | BUY  | DATE       | SYMBOL | 
-    |-----------|--------------|--------|------|------------|--------|  
-    | ALLIANZ   | DE0008404005 | 11     | 2000 | 31.10.2021 | ALIZF  |
-    | MICROSOFT | US5949181045 | 15     | 1000 | 31.10.2022 | MSFT   |
-    | ...       | ...          | ...    | ...  | ...        | ...    |
-    | ...       | ...          | ...    | ...  | ...        | ...    |
+    | NAME      | AMOUNT  | PRICE  | DATE       | SYMBOL | 
+    |-----------|---------|--------|------------|--------|  
+    | ALLIANZ   |  11     |  2000  | 31.10.2021 | ALIZF  |
+    | MICROSOFT |  15     |  1000  | 31.10.2022 | MSFT   |
+    | MICROSOFT | -10     | -1000  | 31.08.2023 | MSFT   |
+    | ...       | ...     | ...    | ...        | ...    |
+    | ...       | ...     | ...    | ...        | ...    |
     
     Each line is a buy or sell transaction
 
 ### Columns
-**NAME**: arbitrary Identifier  
-**ISIN**: ISIN Number (optional)  
-**AMOUNT**: Number of shares  
-**BUY**: The total price (in EUR)  
-**DATE**: Buying Day (no Time or timezone Info nescessary)  
-**SYMBOL**: The symbol of the share 
+    |-------|-------------------------------------------------------------------------------------------------------------------------------|
+    |NAME   | Arbitrary Identifier                                                                                                          |
+    |AMOUNT | Number of shares. If it's a *Sell*, then price is a *negative* number. If it's a *Buy* the it is a *positive* number          | 
+    |PRICE  | The total price (in EUR). If it's a *Sell*, then price is a *negative* number. If it's a *Buy* the it is a *positive* number  |
+    |DATE   | Day of transaction (no Time or timezone Info nescessary)                                                                      |
+    |SYMBOL | The symbol of the share                                                                                                       |
+    |-------|-------------------------------------------------------------------------------------------------------------------------------|

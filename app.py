@@ -6,15 +6,20 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from prophet import Prophet
 from datetime import datetime
+import logging
 
-@st.cache_data(persist="disk")
+# Configure logging
+logging.basicConfig(level=logging.ERROR, format='%(asctime)s - %(levelname)s - %(message)s',filename="st.error.log")
+
+@st.cache_data
 def get_portfolio(csvfile):
     try:
         portfolio = pd.read_csv(csvfile, sep=",")
-        portfolio["DATE"]= pd.to_datetime(portfolio['DATE'])
-        portfolio = portfolio.sort_values("DATE", ascending=True)
-        portfolio = portfolio.set_index("DATE")
+        portfolio["START"]= pd.to_datetime(portfolio['START'], dayfirst=True)
+        portfolio = portfolio.sort_values("START", ascending=True)
+        portfolio = portfolio.set_index("START")
         portfolio.index = portfolio.index.tz_localize(None)
+        st.session_state.portfolio = portfolio
         return portfolio
     except Exception as e:
         st.error(f"Portfolio could not be loaded from {csvfile} ")
@@ -33,7 +38,7 @@ def get_exchange_rates(start,end):
         ex_df.index = ex_df.index.tz_localize(None)
         return ex_df
     except Exception as e:
-        st.error(f"Error: Exchange rates not found")
+        st.error(f"Error: Exchange rates not found: {e}")
         return pd.DataFrame()
 
 def add_help():
@@ -49,39 +54,41 @@ def add_help():
     * *Forecast*: Forecast based on imes series analysis and AI  
 
     #### :red[CSV Structure example]
-        | NAME      | ISIN         | AMOUNT | BUY  | DATE       | SYMBOL | 
-        |-----------|--------------|--------|------|------------|--------|  
-        | ALLIANZ   | DE0008404005 | 11     | 2000 | 31.10.2021 | ALIZF  |
-        | MICROSOFT | US5949181045 | 15     | 1000 | 31.10.2022 | MSFT   |
-        | ...       | ...          | ...    | ...  | ...        | ...    |
-        | ...       | ...          | ...    | ...  | ...        | ...    |
+        | NAME      | AMOUNT | PRICE | DATE       | SYMBOL | 
+        |-----------|--------|-------|------------|--------|  
+        | ALLIANZ   | 11     | 2000  | 31.10.2021 | ALIZF  |
+        | MICROSOFT | 15     | 1000  | 31.10.2022 | MSFT   |
+        | ...       | ...    | ...   | ...        | ...    |
+        | ...       | ...    | ...   | ...        | ...    |
     
     Each line is a buy or sell transaction. The :red[Columns] are defined as follows:
 
         | FIELD      | Description                                          |
         |------------|------------------------------------------------------| 
         | **NAME**   | arbitrary Identifier                                 |  
-        | **ISIN**   | ISIN Number (optional)                               |  
         | **AMOUNT** | Number of shares                                     |  
         | **BUY**    | The total price (in EUR)                             |   
-        | **DATE**   | Buying Day (no Time or timezone Info nescessary)     | 
+        | **START**  | Buying Day (no Time or timezone Info nescessary)     | 
         | **SYMBOL** | The symbol of the share                              | 
     """
-    st.markdown(help)
+    with open("Readme.md") as fh:
+        help = fh.read().split("<!--CUT-->")[-1] 
+
+    st.markdown(help, unsafe_allow_html=True)
 
 @st.cache_data(persist="disk")
 def get_history(_portfolio, _exchange_rates):
     df_combined = pd.DataFrame()
     try:
-        symbols={s:[] for s in list(set(list(portfolio["SYMBOL"])))}    
+        symbols={s:[] for s in list(set(list(st.session_state.portfolio["SYMBOL"])))}    
         for index, row in _portfolio.iterrows():
             symbols[row["SYMBOL"]].append(index)
             ticker = yf.Ticker(row["SYMBOL"])
-            exchange_factor = _exchange_rates[f'{ticker.info["currency"]}EUR=X']
-
             ticker_df = ticker.history(start=index, end=today)
+            exchange_factor = _exchange_rates[f'{ticker.info["currency"]}EUR=X']
+            exchange_factor = exchange_factor[exchange_factor.index >= _portfolio.index.min()]
+
             ticker_df.index = ticker_df.index.tz_localize(None)
-            
             # TOTAL Value per share
             df_combined[f'{row["SYMBOL"]}_{index}_close'] = ticker_df["Close"] * row["AMOUNT"] * exchange_factor
             df_combined[f'{row["SYMBOL"]}_{index}_close'] = df_combined[f'{row["SYMBOL"]}_{index}_close'].interpolate()
@@ -114,7 +121,6 @@ def refine_for_symbols(df_combined, symbols,interval):
         df_combined["std"] = df_combined['_close'].rolling(window=interval).std()
         df_combined["bb_upper"] = df_combined["sma"] + 2 * df_combined["std"]
         df_combined["bb_lower"] = df_combined["sma"] - 2 * df_combined["std"]
-
 
         df_combined[f'performance'] = df_combined[f'_win'] / df_combined[f'_buy']
         df_combined["performance_sma"] = df_combined['performance'].rolling(window=interval).mean()
@@ -159,7 +165,6 @@ def make_portfolio_fig(df_combined, interval, indicators=[], ):
         return make_subplots(specs=[[{"secondary_y": True}]])  
 
 if __name__ == "__main__":
-
     st.set_page_config(layout="wide")
     st.markdown("## Portfolio")
     data_tab, history_tab, forecast_tab, help_tab = st.tabs([f"**Summary**", "**History**","**Forecast**","**Help**"])
@@ -194,53 +199,47 @@ if __name__ == "__main__":
             ex_df = get_exchange_rates(begin,today)
             
             with data_tab:
-                st.dataframe(portfolio, use_container_width= True, )
+                if False:
+                    st.dataframe(portfolio, use_container_width= True, )
+                if True:
+                    if 'portfolio' not in st.session_state: st.session_state.portfolio = portfolio
+                    new_df = st.data_editor(st.session_state.portfolio, use_container_width=True, hide_index=False, num_rows="dynamic")
+                    st.session_state.portfolio = new_df
+                    #     Add_portfolio    = st.button("Add")
+                    #     Remove_portfolio = st.button("Remove"), 
+                    #     Save_portfolio = st.download_button(label="Save", data=st.session_state.portfolio.to_csv(index=False).encode("utf-8"), file_name="portfolio.csv", mime="text/csv",)
+
+                    # if Add_portfolio: 
+                    #     st.session_state.portfolio = pd.concat([st.session_state.portfolio, pd.DataFrame([{col:None for col in st.session_state.portfolio.columns}])], ignore_index=True);  
+                    # if Remove_portfolio: 
+                    #     st.session_state.portfolio = st.session_state.portfolio.drop(st.session_state.portfolio.index[-1]);
+
             with history_tab:
                 pass
             with st.sidebar:
-                st.markdown(
-                    """
-                    <style> 
-                        span[data-baseweb="tag"] {background-color: #e0e0e0 !important; color: #000000 !important; font-size:90%;padding:8px; width:4.5rem}
-                    </style>
-                    """,
-                    unsafe_allow_html=True,
-                )
-
+                st.markdown(""" <style>  span[data-baseweb="tag"] {background-color: #e0e0e0 !important; color: #000000 !important; font-size:90%;padding:8px; width:4.5rem}  </style> """, unsafe_allow_html=True,)
                 lst_indicators =["% Perf.", "% SMA", "% EMA", "% BB", "SMA", "EMA", "BB"]
-                lst_portfolio = list(set(portfolio["SYMBOL"]))
+                lst_portfolio = list(set(st.session_state.portfolio["SYMBOL"]))
                 selected_shares = st.multiselect(f":blue[**2.Select Symbols from {upl_file.name}**]", lst_portfolio, default=lst_portfolio)
-                indicators = st.multiselect(":blue[**3.Select Indicators**]", lst_indicators , default=["% Perf."], key="indicators", format_func=lambda x: str(x))
-                interval = st.slider(label=":blue[**4.Set Interval for indicators**]",min_value=1, max_value=365, value=60,  key="interval")
-                #share_selector = st.button("Load Data into Chart", use_container_width=True, type="primary")
+                indicators = st.multiselect(":blue[**3.Select Indicators**]", lst_indicators, default=["% Perf."], key="indicators", format_func=lambda x: str(x))
+                interval = st.slider(label=":blue[**4.Set Interval for indicators**]",min_value=1, max_value=365, value=60, key="interval")
 
-        if indicators:
+        if selected_shares or new_df:
             with st.spinner("compute Portfolio history..."):
-
                 # specific Stock Data 
-                df_combined, symbols = get_history(portfolio, ex_df)
+                df_combined, symbols = get_history(st.session_state.portfolio, ex_df)
                 symbols = {s:i for s,i in symbols.items() if s in selected_shares}
                 df_combined =  refine_for_symbols(df_combined, symbols, interval)
 
                 # Display graph
                 fig = make_portfolio_fig(df_combined, interval=interval, indicators=indicators)
+
                 with history_tab:
-                    PLOT_BGCOLOR = "#ffffff"
-                    st.markdown(
-                        f"""
-                        <style>
-                        .stPlotlyChart {{
-                        border-radius: 6px;
-                        box-shadow: 0 8px 12px 0 rgba(0, 0, 0, 0.20), 0 6px 20px 0 rgba(0, 0, 0, 0.30);
-                        }}
-                        </style>
-                        """, unsafe_allow_html=True
-                    )
+                    st.markdown(f""" <style>.stPlotlyChart {{ border-radius: 6px; box-shadow: 0 8px 12px 0 rgba(0, 0, 0, 0.20), 0 6px 20px 0 rgba(0, 0, 0, 0.30); }}</style>""", unsafe_allow_html=True)
                     fig.update_layout(title=f'                  History Graph for {", ".join(list(symbols.keys()))}')
-                    fig.update_layout(paper_bgcolor=PLOT_BGCOLOR)
+                    fig.update_layout(paper_bgcolor="#ffffff")
                     st.plotly_chart(fig,use_container_width=True,height=800, theme="streamlit")
                 
                 # Analysis and prognosis
                 with forecast_tab:
                     st.write("tbd")
-
