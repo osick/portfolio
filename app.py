@@ -15,9 +15,9 @@ logging.basicConfig(level=logging.ERROR, format='%(asctime)s - %(levelname)s - %
 def get_portfolio(csvfile):
     try:
         portfolio = pd.read_csv(csvfile, sep=",")
-        portfolio["START"]= pd.to_datetime(portfolio['START'], dayfirst=True)
-        portfolio = portfolio.sort_values("START", ascending=True)
-        portfolio = portfolio.set_index("START")
+        portfolio["DATE"]= pd.to_datetime(portfolio['DATE'], dayfirst=True)
+        portfolio = portfolio.sort_values("DATE", ascending=True)
+        portfolio = portfolio.set_index("DATE")
         portfolio.index = portfolio.index.tz_localize(None)
         st.session_state.portfolio = portfolio
         return portfolio
@@ -67,8 +67,8 @@ def add_help():
         |------------|------------------------------------------------------| 
         | **NAME**   | arbitrary Identifier                                 |  
         | **AMOUNT** | Number of shares                                     |  
-        | **BUY**    | The total price (in EUR)                             |   
-        | **START**  | Buying Day (no Time or timezone Info nescessary)     | 
+        | **PRICE**    | The total price (in EUR)                             |   
+        | **DATE**  | Buying Day (no Time or timezone Info nescessary)     | 
         | **SYMBOL** | The symbol of the share                              | 
     """
     with open("Readme.md") as fh:
@@ -93,10 +93,11 @@ def get_history(_portfolio, _exchange_rates):
             df_combined[f'{row["SYMBOL"]}_{index}_close'] = ticker_df["Close"] * row["AMOUNT"] * exchange_factor
             df_combined[f'{row["SYMBOL"]}_{index}_close'] = df_combined[f'{row["SYMBOL"]}_{index}_close'].interpolate()
             
-            # BUY Value per share
-            ticker_df["BUY"]= row["BUY"]
-            df_combined[f'{row["SYMBOL"]}_{index}_buy'] = ticker_df["BUY"]
+            # PRICE Value per share
+            ticker_df["PRICE"]= row["PRICE"]
+            df_combined[f'{row["SYMBOL"]}_{index}_buy'] = ticker_df["PRICE"]
             df_combined[f'{row["SYMBOL"]}_{index}_buy'] = df_combined[f'{row["SYMBOL"]}_{index}_buy'].interpolate() 
+            
         return df_combined, symbols
     except Exception as e:
         st.error(f"could not do history analysis on the portfolio: {e}")
@@ -142,6 +143,7 @@ def make_portfolio_fig(df_combined, interval, indicators=[], ):
         # primary yaxis
         fig.add_trace(go.Scatter(x=df_combined.index, y=df_combined[f'_buy'], mode='lines',  name=f"€ Buy", line=dict(color="#ffe490"), fill="tonexty",  ), secondary_y=False,)
         fig.add_trace(go.Scatter(x=df_combined.index, y=df_combined[f'_close'], line=dict(color="#a0ff90"),  fill="tonexty",  mode='lines', name=f"€ Win" ), secondary_y=False,)
+        if "Perf." in indicators: fig.add_trace(go.Scatter(x=df_combined.index, y=df_combined[f'_win'], mode='lines', name=f"Perf." ), secondary_y=False,)
         if "SMA"  in indicators: fig.add_trace(go.Scatter(x=df_combined.index, y=df_combined[f'sma'], mode='lines', name=f"SMA ({interval}d)" ), secondary_y=False,)
         if "EMA"  in indicators: fig.add_trace(go.Scatter( x=df_combined.index, y=df_combined[f'ema'],  mode='lines',  name=f"EMA ({interval}d)" ), secondary_y=False,)
         if "BB"   in indicators:
@@ -194,6 +196,7 @@ if __name__ == "__main__":
     if upl_file:
         with st.spinner("Your Shares..."):
             portfolio = get_portfolio(upl_file)
+            st.cache_data.clear()
             today = datetime.now()
             begin = portfolio.index[0]
             ex_df = get_exchange_rates(begin,today)
@@ -218,13 +221,13 @@ if __name__ == "__main__":
                 pass
             with st.sidebar:
                 st.markdown(""" <style>  span[data-baseweb="tag"] {background-color: #e0e0e0 !important; color: #000000 !important; font-size:90%;padding:8px; width:4.5rem}  </style> """, unsafe_allow_html=True,)
-                lst_indicators =["% Perf.", "% SMA", "% EMA", "% BB", "SMA", "EMA", "BB"]
+                lst_indicators =["% Perf.", "% SMA", "% EMA", "% BB", "Perf.", "SMA", "EMA", "BB"]
                 lst_portfolio = list(set(st.session_state.portfolio["SYMBOL"]))
                 selected_shares = st.multiselect(f":blue[**2.Select Symbols from {upl_file.name}**]", lst_portfolio, default=lst_portfolio)
                 indicators = st.multiselect(":blue[**3.Select Indicators**]", lst_indicators, default=["% Perf."], key="indicators", format_func=lambda x: str(x))
                 interval = st.slider(label=":blue[**4.Set Interval for indicators**]",min_value=1, max_value=365, value=60, key="interval")
 
-        if selected_shares or new_df:
+        if selected_shares:
             with st.spinner("compute Portfolio history..."):
                 # specific Stock Data 
                 df_combined, symbols = get_history(st.session_state.portfolio, ex_df)

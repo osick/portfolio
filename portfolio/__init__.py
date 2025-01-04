@@ -38,7 +38,7 @@ class Portfolio:
         self.end_date = None
 
         # for simplicity the portfolio is calcluated in one currency
-        self.target_currency = "USD"
+        self.target_currency = "EUR"
 
         # The historical development of the portfolio from start to end
         self.history = None
@@ -61,19 +61,16 @@ class Portfolio:
         loads transactions from csvfile and save them to self.transactions. Also self.basedata will be filled.
         Columns: NAME, AMOUNT, PRICE, DATE, SYMBOL, 
 
-
         Parameters
         ----------
         csvfile : str
             The file name of the CSV file.
-        
+
         Returns
         -------
-        -
         
         Raises
         -------
-        -
         
         """
         try:
@@ -179,8 +176,9 @@ class Portfolio:
         
         if start is None:   start = self.start_date
         if end   is None:   end = datetime.today()
-
+        
         days = pd.date_range(start=start, end=end, freq='D')
+        
         self.history = pd.DataFrame({'Date': days})
         self.history = self.history.set_index('Date')
            
@@ -190,7 +188,8 @@ class Portfolio:
             ticker_df, _currency = Portfolio._get_history_ticker(symbol,index,end)
 
             ticker_df.index = ticker_df.index.tz_localize(None)
-            exchange_factor = self._exchange_rates[f'{_currency}EUR=X']
+            exchange_factor = self._exchange_rates[f'{_currency}{self.target_currency}=X']
+            exchange_factor = exchange_factor.tz_localize(None)
             exchange_factor = exchange_factor[start:end]
             ticker_df["PRICE"] = row["PRICE"]
 
@@ -282,7 +281,8 @@ class Portfolio:
     def filter_history(self, symbols: list):
         pass
 
-    def get_portfolio_tech_indicators(self, interval=20, filter_symbols=list, inplace= True):
+
+    def get_portfolio_tech_indicators(self, interval=20, filter_symbols = None, inplace= True):
         if inplace == True: indicators=self.history
         else: indicators = pd.DataFrame()
         indicators[f"{self._prefix_portfolio_indicator}win"]   = self.history[f'close'] - self.history[f'price']
@@ -308,12 +308,12 @@ class Portfolio:
         
     def get_symbol_tech_indicators(self, symbol, interval=14, inplace = True):
         if inplace == True:
-            self.history[f"{self._prefix_symbol_indicator}{symbol}_mfi"] = Portfolio.calculate_mfi(self.history[f"{symbol}_high"], self.history[f"{symbol}_low"], self.history[f"{symbol}_close"], f"{symbol}_volume", interval=interval)
+            self.history[f"{self._prefix_symbol_indicator}{symbol}_mfi"] = Portfolio.calculate_mfi(self.history[f"{self._prefix_ticker}{symbol}_high"], self.history[f"{self._prefix_ticker}{symbol}_low"], self.history[f"{self._prefix_ticker}{symbol}_close"], self.history[f"{self._prefix_ticker}{symbol}_volume"], interval=interval)
             self.symbol_tech_indicators=[col[len(self._prefix_symbol_indicator):] for col in self.history.columns if col.startswith(self._prefix_symbol_indicator)]
             return
         else:
             indicators= pd.DataFrame()
-            indicators[f"{self._prefix_symbol_indicator}{symbol}_mfi"] = Portfolio.calculate_mfi(self.history[f"{symbol}_high"], self.history[f"{symbol}_low"], self.history[f"{symbol}_close"], f"{symbol}_volume", interval=interval)
+            indicators[f"{self._prefix_symbol_indicator}{symbol}_mfi"] = Portfolio.calculate_mfi(self.history[f"{self._prefix_ticker}{symbol}_high"], self.history[f"{self._prefix_ticker}{symbol}_low"], self.history[f"{self._prefix_ticker}{symbol}_close"], self.history[f"{self._prefix_ticker}{symbol}_volume"], interval=interval)
             return indicators
 
 # ----------------------------
@@ -335,7 +335,6 @@ class Portfolio:
         if added_item is None:
             self.basedata = pd.DataFrame({"SYMBOL":list(set(list(self.transactions["SYMBOL"])))})
             infos = []
-            # try:
             for _, row in self.basedata.iterrows():
                 ticker_info= Portfolio._get_ticker_info(row["SYMBOL"])
                 info = {"SYMBOL":row["SYMBOL"]}
@@ -372,12 +371,15 @@ class Portfolio:
             self._exchange_rates = pd.DataFrame(_rates).T
             self._exchange_rates.columns = rates_symbols
             self._exchange_rates[f"{self.target_currency.upper()}{self.target_currency.upper()}=X"] = 1.0
+            logging.error(self._exchange_rates)
         else:
             df_rates=pd.DataFrame(_rates).T
             self.df_rates.columns = rates_symbols
             self._exchange_rates = pd.concat([self._exchange_rates, df_rates], axis=1)
 
         self._exchange_rates.index = self._exchange_rates.index.tz_localize(None)
+
+        print("\n\n\n\n",self._exchange_rates,"\n\n\n\n")
 
 # ----------------------------
 # TECH INDICATOR methods
@@ -412,7 +414,7 @@ class Portfolio:
         # from https://blog.quantinsti.com/build-technical-indicators-in-python/
         # makes only sense for a single symbol, not a portfolio
         typical_price = (high + low + close) / 3
-        money_flow = typical_price * volume
+        money_flow = typical_price * volume.astype(dtype=np.float64)
         mf_sign = np.where(typical_price > typical_price.shift(1), 1, -1)
         signed_mf = money_flow * mf_sign
         positive_mf = np.where(signed_mf > 0, signed_mf, 0)
