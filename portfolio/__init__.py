@@ -6,8 +6,15 @@ import logging
 import sys
 import functools
 from prophet import Prophet
+from warnings import simplefilter
+simplefilter(action="ignore", category=pd.errors.PerformanceWarning)
 
-logging.basicConfig(level=logging.ERROR, format='%(asctime)s - %(levelname)s - %(message)s',filename="portfolio.error.log")
+logging.basicConfig(
+    format="{asctime} - {levelname} - {message}",
+    style="{", 
+    datefmt="%Y-%m-%d %H:%M",
+    filename="portfolio.log"
+)
 logging.getLogger().addHandler(logging.StreamHandler(sys.stdout))
 
 class Portfolio:
@@ -52,7 +59,6 @@ class Portfolio:
         self._prefix_symbol_indicator="__symb_ind__"
         self._prefix_ticker="__tck__"
 
-
 # ----------------------------
 # PUBLIC methods
 # ----------------------------
@@ -75,13 +81,14 @@ class Portfolio:
         """
         try:
             # self.transactions
-            self.transactions  = pd.read_csv(csvfile, sep=",")
+            self.transactions  = pd.read_csv(csvfile, sep=",", dayfirst=True,date_format="%d.%m.%Y")
             self.transactions  = Portfolio._set_structure(self.transactions)
 
             # self.start_date
             self.start_date = self.transactions.index.min()
             self._load_basedata()
-        
+            logging.info(f"Data loaded from CSV file {csvfile}:")
+
         except Exception as e:
             logging.error(f"Data could not be loaded from CSV file {csvfile}: {e} ")
 
@@ -144,7 +151,7 @@ class Portfolio:
         except Exception as e:
             logging.error(f"History could not be written to CSV file {csvfile}: {e.with_traceback()} ")
 
-    def load_history(self, start = None, end = None, aggregate_to = None, cleanup = False, filter_symbols= None):
+    def load_history(self, start = None, end = None, aggregate_to = None, cleanup = False, symbols:list= None):
         """
         computes history and saves to self.history
 
@@ -173,7 +180,7 @@ class Portfolio:
         -
         
         """
-        
+        logging.info(f"started loading history data")
         if start is None:   start = self.start_date
         if end   is None:   end = datetime.today()
         
@@ -183,6 +190,9 @@ class Portfolio:
         self.history = self.history.set_index('Date')
            
         for index, row in self.transactions.iterrows():
+            # filter only for symbols list
+            if symbols is not None and row["SYMBOL"] not in symbols: continue 
+
             symbol = row["SYMBOL"]
             
             ticker_df, _currency = Portfolio._get_history_ticker(symbol,index,end)
@@ -213,15 +223,21 @@ class Portfolio:
             self.history[f'{symbol}_price_{index.date()}'] = ticker_df["PRICE"]
             self.history[f'{symbol}_price_{index.date()}'] = self.history[f'{symbol}_price_{index.date()}'].interpolate() 
 
-        self.aggregate_to(level = aggregate_to, filter_symbols= filter_symbols, cleanup = cleanup, inplace=True)
+        self.aggregate_to(level = aggregate_to, symbols= symbols, cleanup = cleanup, inplace=True)
+        logging.info(f"loading history data done!")
     
-    def aggregate_to(self, level = None, filter_symbols= None, cleanup = False, inplace=False):
+    def aggregate_to(self, level = None, symbols= None, cleanup = False, inplace=False):
         if inplace == False: 
             aggregate = pd.DataFrame()
         if level == "portfolio":                
             cols={"price":[],"close":[], "amount":[]}
+
+            filtered_history_columns =self.history.columns
+            if symbols is not None:
+                filtered_history_columns=[col for col in self.history.columns if "_" in col and col.split("_")[0] in symbols]
+                logging.info(f"aggregate_to('portfolio') {filtered_history_columns = }")
             for col_type in cols.keys(): 
-                cols[col_type] = [col for col in self.history.columns if "_"+col_type+"_" in col]
+                cols[col_type] = [col for col in filtered_history_columns if "_"+col_type+"_" in col]
                 if col_type != "amount":
                     if inplace == False:
                         aggregate[f'{col_type}'] = self.history[cols[col_type]].sum(axis=1)
@@ -230,11 +246,11 @@ class Portfolio:
                 if cleanup == True and inplace == True:
                     self.history = self.history.drop(cols[col_type], axis=1) 
         elif level == "symbol":
-            for symbol in list(set(self.transactions["SYMBOL"])):                
+            symbol_list=list(set(self.transactions["SYMBOL"])) if symbols is None else symbols
+            for symbol in symbol_list:                
                 col_per_symbol={"price":[],"close":[], "amount":[]}
                 for col_type in col_per_symbol.keys(): 
                     col_per_symbol[col_type] = [col for col in self.history.columns if col.startswith(symbol+"_"+col_type+"_")]
-                    
                     if inplace == False:
                        aggregate[f'{symbol}_{col_type}'] = self.history[col_per_symbol[col_type]].sum(axis=1)
                     else:
@@ -281,8 +297,7 @@ class Portfolio:
     def filter_history(self, symbols: list):
         pass
 
-
-    def get_portfolio_tech_indicators(self, interval=20, filter_symbols = None, inplace= True):
+    def get_portfolio_tech_indicators(self, interval=20, symbols = None, inplace= True):
         if inplace == True: indicators=self.history
         else: indicators = pd.DataFrame()
         indicators[f"{self._prefix_portfolio_indicator}win"]   = self.history[f'close'] - self.history[f'price']
@@ -299,7 +314,8 @@ class Portfolio:
         indicators[f"{self._prefix_portfolio_indicator}perf_bb_lower"] = indicators[f"{self._prefix_portfolio_indicator}perf_sma"] - 2 * indicators[f"{self._prefix_portfolio_indicator}perf_std"]
         indicators[f"{self._prefix_portfolio_indicator}rsi"] = Portfolio.calculate_rsi(self.history, interval=interval)
         indicators[f"{self._prefix_portfolio_indicator}macd"], indicators[f"{self._prefix_portfolio_indicator}signal_line"], indicators[f"{self._prefix_portfolio_indicator}histogram"],  = Portfolio.calculate_macd(self.history)
-
+        # indicators[f"{self._prefix_portfolio_indicator}mfi"] = Portfolio.calculate_mfi()
+        
         if inplace == True:
             self.portfolio_tech_indicators=[col[len(self._prefix_portfolio_indicator):] for col in self.history.columns if col.startswith(self._prefix_portfolio_indicator)]
             return
@@ -371,15 +387,12 @@ class Portfolio:
             self._exchange_rates = pd.DataFrame(_rates).T
             self._exchange_rates.columns = rates_symbols
             self._exchange_rates[f"{self.target_currency.upper()}{self.target_currency.upper()}=X"] = 1.0
-            logging.error(self._exchange_rates)
         else:
             df_rates=pd.DataFrame(_rates).T
             self.df_rates.columns = rates_symbols
             self._exchange_rates = pd.concat([self._exchange_rates, df_rates], axis=1)
 
         self._exchange_rates.index = self._exchange_rates.index.tz_localize(None)
-
-        print("\n\n\n\n",self._exchange_rates,"\n\n\n\n")
 
 # ----------------------------
 # TECH INDICATOR methods
@@ -393,7 +406,7 @@ class Portfolio:
         gain = (delta.where(delta > 0, 0)).rolling(window=interval).mean()
         loss = (-delta.where(delta < 0, 0)).rolling(window=interval).mean()
         rs = gain / loss
-        rsi = 100 - (100 / (1 + rs))
+        rsi = 1 - (1 / (1 + rs))
         return rsi
     
     @staticmethod
@@ -428,7 +441,7 @@ class Portfolio:
 # ----------------------------
     @staticmethod
     def _set_structure(struct):
-        struct["DATE"]= pd.to_datetime(struct['DATE'], format='mixed')
+        struct["DATE"]= pd.to_datetime(struct['DATE'], format="%d.%m.%Y")
         struct = struct.sort_values("DATE", ascending=True)
         struct = struct.set_index("DATE")
         struct.index = struct.index.tz_localize(None)
