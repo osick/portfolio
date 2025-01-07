@@ -4,8 +4,11 @@ import pandas as pd
 from datetime import datetime
 import logging
 import sys
-import functools
 from prophet import Prophet
+
+from .ticker import _get_history_ticker, _get_rates, _get_ticker_info
+
+
 from warnings import simplefilter
 simplefilter(action="ignore", category=pd.errors.PerformanceWarning)
 
@@ -65,7 +68,7 @@ class Portfolio:
     def from_csv(self,csvfile):
         """
         loads transactions from csvfile and save them to self.transactions. Also self.basedata will be filled.
-        Columns: NAME, AMOUNT, PRICE, DATE, SYMBOL, 
+        Columns: NAME, VOLUME, PRICE, DATE, SYMBOL, 
 
         Parameters
         ----------
@@ -95,7 +98,7 @@ class Portfolio:
     def to_csv(self, csvfile, precision = None):
         """
         write transations to csvfile
-        Columns: NAME, AMOUNT, PRICE, DATE, SYMBOL, 
+        Columns: NAME, VOLUME, PRICE, DATE, SYMBOL, 
 
 
         Parameters
@@ -195,7 +198,7 @@ class Portfolio:
 
             symbol = row["SYMBOL"]
             
-            ticker_df, _currency = Portfolio._get_history_ticker(symbol,index,end)
+            ticker_df, _currency = _get_history_ticker(symbol,index,end)
 
             ticker_df.index = ticker_df.index.tz_localize(None)
             exchange_factor = self._exchange_rates[f'{_currency}{self.target_currency}=X']
@@ -208,16 +211,16 @@ class Portfolio:
             self.history[f"{self._prefix_ticker}{symbol}_low"]=ticker_df["Low"]
             self.history[f"{self._prefix_ticker}{symbol}_volume"]=ticker_df["Volume"]
 
-            self.history[f'{symbol}_amount_{index.date()}'] = 0.0
-            self.history.loc[index:end, f'{symbol}_amount_{index.date()}'] =  row["AMOUNT"]
+            self.history[f'{symbol}_volume_{index.date()}'] = 0.0
+            self.history.loc[index:end, f'{symbol}_volume_{index.date()}'] =  row["VOLUME"]
 
-            self.history[f'{symbol}_close_{index.date()}'] = ticker_df["Close"] * row["AMOUNT"] * exchange_factor
+            self.history[f'{symbol}_close_{index.date()}'] = ticker_df["Close"] * row["VOLUME"] * exchange_factor
             self.history[f'{symbol}_close_{index.date()}'] = self.history[f'{symbol}_close_{index.date()}'].interpolate()
             
-            self.history[f'{symbol}_high_{index.date()}'] = ticker_df["High"] * row["AMOUNT"] * exchange_factor
+            self.history[f'{symbol}_high_{index.date()}'] = ticker_df["High"] * row["VOLUME"] * exchange_factor
             self.history[f'{symbol}_high_{index.date()}'] = self.history[f'{symbol}_high_{index.date()}'].interpolate()
 
-            self.history[f'{symbol}_low_{index.date()}'] = ticker_df["Low"] * row["AMOUNT"] * exchange_factor
+            self.history[f'{symbol}_low_{index.date()}'] = ticker_df["Low"] * row["VOLUME"] * exchange_factor
             self.history[f'{symbol}_low_{index.date()}'] = self.history[f'{symbol}_low_{index.date()}'].interpolate()
 
             self.history[f'{symbol}_price_{index.date()}'] = ticker_df["PRICE"]
@@ -230,7 +233,7 @@ class Portfolio:
         if inplace == False: 
             aggregate = pd.DataFrame()
         if level == "portfolio":                
-            cols={"price":[],"close":[], "amount":[]}
+            cols={"price":[],"close":[], "volume":[]}
 
             filtered_history_columns =self.history.columns
             if symbols is not None:
@@ -238,7 +241,7 @@ class Portfolio:
                 logging.info(f"aggregate_to('portfolio') {filtered_history_columns = }")
             for col_type in cols.keys(): 
                 cols[col_type] = [col for col in filtered_history_columns if "_"+col_type+"_" in col]
-                if col_type != "amount":
+                if col_type != "volume":
                     if inplace == False:
                         aggregate[f'{col_type}'] = self.history[cols[col_type]].sum(axis=1)
                     else:
@@ -248,7 +251,7 @@ class Portfolio:
         elif level == "symbol":
             symbol_list=list(set(self.transactions["SYMBOL"])) if symbols is None else symbols
             for symbol in symbol_list:                
-                col_per_symbol={"price":[],"close":[], "amount":[]}
+                col_per_symbol={"price":[],"close":[], "volume":[]}
                 for col_type in col_per_symbol.keys(): 
                     col_per_symbol[col_type] = [col for col in self.history.columns if col.startswith(symbol+"_"+col_type+"_")]
                     if inplace == False:
@@ -272,7 +275,7 @@ class Portfolio:
         Parameters
         ----------
         transaction: pd.Dataframe
-            structure is pd.DataFrame([{"NAME":NAME,"AMOUNT":AMOUNT,"PRICE":BUY,"DATE":DATE,"SYMBOL":SYMBOL}])
+            structure is pd.DataFrame([{"NAME":NAME,"VOLUME":VOLUME,"PRICE":BUY,"DATE":DATE,"SYMBOL":SYMBOL}])
                         
         Returns
         -------
@@ -285,7 +288,7 @@ class Portfolio:
         Examples
         --------
             portfolio = Portfolio("prtf.csv")
-            transaction = pd.DataFrame([{"NAME":NAME,"AMOUNT":AMOUNT,"PRICE":BUY,"DATE":DATE,"SYMBOL":SYMBOL}])
+            transaction = pd.DataFrame([{"NAME":NAME,"VOLUME":VOLUME,"PRICE":BUY,"DATE":DATE,"SYMBOL":SYMBOL}])
             portfolio.add_transation(transaction)
 
         """
@@ -352,7 +355,7 @@ class Portfolio:
             self.basedata = pd.DataFrame({"SYMBOL":list(set(list(self.transactions["SYMBOL"])))})
             infos = []
             for _, row in self.basedata.iterrows():
-                ticker_info= Portfolio._get_ticker_info(row["SYMBOL"])
+                ticker_info= _get_ticker_info(row["SYMBOL"])
                 info = {"SYMBOL":row["SYMBOL"]}
                 for k in self.selected_info_fields:
                     info[k] = ticker_info.get(k,None)
@@ -363,7 +366,7 @@ class Portfolio:
 
         elif isinstance(added_item, pd.DataFrame) and isinstance(self.basedata, pd.DataFrame):
             if added_item["SYMBOL"].iloc[0] not in set(self.basedata["SYMBOL"]):
-                ticker_info= Portfolio._get_ticker_info(added_item["SYMBOL"].iloc[0])
+                ticker_info= _get_ticker_info(added_item["SYMBOL"].iloc[0])
                 info = {"SYMBOL":added_item["SYMBOL"].iloc[0]}
                 for k in self.selected_info_fields:
                     info[k] = ticker_info.get(k,None)
@@ -381,7 +384,7 @@ class Portfolio:
         if start is None: start = self.start_date
         if end  is None: end = datetime.today()
         joined_rates_symbols = ' '.join(rates_symbols)
-        _rates = Portfolio._get_rates(joined_rates_symbols, start, end)
+        _rates = _get_rates(joined_rates_symbols, start, end)
         
         if not append:
             self._exchange_rates = pd.DataFrame(_rates).T
@@ -406,7 +409,7 @@ class Portfolio:
         gain = (delta.where(delta > 0, 0)).rolling(window=interval).mean()
         loss = (-delta.where(delta < 0, 0)).rolling(window=interval).mean()
         rs = gain / loss
-        rsi = 1 - (1 / (1 + rs))
+        rsi=1-1/(1+rs)
         return rsi
     
     @staticmethod
@@ -434,7 +437,7 @@ class Portfolio:
         negative_mf = np.where(signed_mf < 0, -signed_mf, 0)
         mf_avg_gain = pd.Series(positive_mf).rolling(interval, min_periods=1).sum()
         mf_avg_loss = pd.Series(negative_mf).rolling(interval, min_periods=1).sum()
-        return (100 - 100 / (1 + mf_avg_gain / mf_avg_loss)).to_numpy()
+        return (1-1/(1+mf_avg_gain/mf_avg_loss)).to_numpy()
 
 # ----------------------------
 # HELPER static methods
@@ -446,35 +449,3 @@ class Portfolio:
         struct = struct.set_index("DATE")
         struct.index = struct.index.tz_localize(None)
         return struct
-
-# ----------------------------
-# CACHED static methods
-# ----------------------------
-    @functools.cache
-    @staticmethod
-    def _get_rates(rates_symbols, start, end):
-        tickers = yf.Tickers(rates_symbols)
-        _rates = []
-        for i in tickers.tickers: 
-            _rates.append(tickers.tickers[i].history(start=start, end=end, period="1d").Close)
-        return _rates
-
-    @functools.cache
-    @staticmethod
-    def _get_history_ticker(symbol,start,end):
-        ticker = Portfolio._get_ticker(symbol)
-        ticker_df = ticker.history(start=start, end=end)
-        return ticker_df, ticker.info["currency"]
-
-    @functools.cache
-    @staticmethod
-    def _get_ticker_info(symbol):
-        ticker = Portfolio._get_ticker(symbol)
-        return ticker.info
-    
-    @functools.cache
-    @staticmethod
-    def _get_ticker(symbol):
-        ticker = yf.Ticker(symbol)
-        return ticker
-    

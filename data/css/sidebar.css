@@ -1,13 +1,15 @@
 .block-container {
-    padding-top: 2.5rem; 
+    padding-top: 4rem; 
     padding-bottom: 1rem;
 }
 
-[data-testid='stFileUploader'] * {
+[data-testid='stFileUploader'] {
+    margin:0;
     padding:0;
-    margin:4px;
-    vertical-align:center
+    font-weight: bold;
 }
+
+
 
 [data-testid='stFileUploader'] section > input + div {
     display:none;
@@ -26,42 +28,59 @@
 }
 
 .stTextInput > span {
-    font-size:60%;  
+    font-size:8px;  
     font-weight:bold; 
     color:blue;
 }
 
 .stMultiSelect > span {
-    font-size:60%; 
+    font-size:8px; 
     font-weight:bold; 
     color:blue;
 } 
 
+
 .stTabs [data-baseweb="tab"] {
     margin-top: 20px;
-    height: 20px; 
+    height: 40px; 
     white-space: pre-wrap; 
-    background-color: #eeeeee; 
+    background-color: #ffffff; 
+    border: 3px solid #d0d0d0;
+    border-bottom-width: 0;
     color: #000000; 
-    padding: 10px;
+    padding: 15px;
     border-top-left-radius: 6px; 
     border-top-right-radius: 6px; 
 }
 
 .stTabs [aria-selected="true"] {
-    background-color: #404040; 
-    color: #ffff00;
+    background-color: black; 
+    color: #ffffff;
 }
 
 span[data-baseweb="tag"] {
     background-color: #e0e0e0 !important; 
     color: #000000 !important; 
-    font-size:90%;
-    padding:8px; 
-    width:4.5rem
+    font-size:13px;
+    padding:6px; 
 }  
 
 .stPlotlyChart { 
     border-radius: 6px; 
     box-shadow: 0 8px 12px 0 rgba(0, 0, 0, 0.20), 0 6px 20px 0 rgba(0, 0, 0, 0.30); 
+}
+
+[data-testid=stSidebar] {
+    background-color: #fff9ff;
+    border-right: 2px solid #c0c0c0;
+}
+
+
+[data-testid=stFileUploader] button {
+    background-color: white;
+    border: none;
+}
+
+[data-testid=stFileUploader] {
+    font-size: 14px;
 }

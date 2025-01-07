@@ -2,6 +2,10 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from portfolio import Portfolio, logging
 import pandas as pd
+import functools
+import os
+import tempfile
+import base64
 
 
 class Figure():
@@ -37,7 +41,9 @@ class Figure():
     def __init__(self,portfolio: Portfolio):
         self.portfolio = portfolio
 
-    def fig(self, level="portfolio", primary_y_stretch:float=1.0, secondary_y_stretch:float=1.0, exclude:list = None, height:int = 600):
+    @functools.cache
+    def fig(self, level="portfolio", primary_y_stretch:float=1.0, secondary_y_stretch:float=1.0, exclude:str = None, height:int = 600, sep="||"):
+        exclude = exclude.split(sep)
 
         self.y_axis={"primary_y":{"max":0, "min":0},"secondary_y":{"max":0, "min":0}}
         
@@ -84,3 +90,20 @@ class Figure():
         fig.update_layout(height=height)
 
         return fig
+    
+
+    @staticmethod
+    def chart_to_image(fig):
+        try:
+            if not os.path.exists("data"):
+                os.mkdir("data")
+            with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmpfile:
+                tmpfile_path = os.path.join("data", tmpfile.name)
+                fig.write_image(tmpfile_path)
+            with open(tmpfile_path, "rb") as image_file:
+                image_data = base64.b64encode(image_file.read()).decode('utf-8')
+            os.remove(tmpfile_path)
+            return image_data
+        except Exception as e:
+            logging.error(f"Error saving chart to image: {e}")
+            return None
