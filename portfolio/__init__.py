@@ -34,12 +34,15 @@ class Portfolio:
             self.target_currency        : For simplicity the portfolio is calcluated in one currency. Defaults to "USD"      
             self.selected_info_fields   : Minimal List of (default) info fields from yfinance which will be stored in basedata
         """
+        self._init_data()
+
+    def _init_data(self):
 
         # The total asset in your portfolio
         self.basedata = None
 
         # The list of transations (sell and buy)
-        self.transactions = None 
+        self.transactions = pd.DataFrame([]) 
 
         # The start date of the portfolio
         self.start_date = None
@@ -53,6 +56,9 @@ class Portfolio:
         # The historical development of the portfolio from start to end
         self.history = None
 
+        # unique list of symbols of the portfolio
+        self.symbol_list = []
+
         # default info values from yfinance which will be stored in basedata
         self.selected_info_fields=["longName", "country", "currency", "sector", "industry", "marketCap"] 
 
@@ -62,6 +68,8 @@ class Portfolio:
         self._prefix_symbol_indicator="__symb_ind__"
         self._prefix_ticker="__tck__"
 
+        self.portfolio_tech_indicators = ['win', 'sma', 'ema', 'std', 'bb_upper', 'bb_lower', 'perf', 'perf_sma', 'perf_ema', 'perf_std', 'perf_bb_upper', 'perf_bb_lower', 'rsi', 'macd', 'signal_line', 'histogram']
+        
 # ----------------------------
 # PUBLIC methods
 # ----------------------------
@@ -84,18 +92,51 @@ class Portfolio:
         """
         try:
             # self.transactions
-            self.transactions  = pd.read_csv(csvfile, sep=",", dayfirst=True,date_format="%d.%m.%Y")
-            self.transactions  = Portfolio._set_structure(self.transactions)
-
-            # self.start_date
-            self.start_date = self.transactions.index.min()
-            self._load_basedata()
+            df  = pd.read_csv(csvfile, sep=",", dayfirst=True,date_format="%d.%m.%Y")
+            self.load_transactions(df)
             logging.info(f"Data loaded from CSV file {csvfile}:")
 
         except Exception as e:
             logging.error(f"Data could not be loaded from CSV file {csvfile}: {e} ")
 
-    def to_csv(self, csvfile, precision = None):
+
+    def load_transactions(self, df:pd.DataFrame):
+        """
+        loads transactions from Pandas Dataframe and save them to self.transactions. Also self.basedata will be filled.
+        Relevant columns: NAME, VOLUME, PRICE, DATE, SYMBOL, 
+        It also resets all relevant class data.
+
+        Parameters
+        ----------
+        df : pd.Dataframe
+            The dataframe to be loaded
+
+        Returns
+        -------
+        
+        Raises
+        -------
+        
+        """
+        try:
+            # self.transactions
+            self.transactions  = df
+            self.transactions  = Portfolio._set_structure(self.transactions)
+
+            # Helper column "select" to select relevant transactions only
+            if "selected" not in self.transactions.columns:
+                self.transactions["selected"]=True
+            self.symbol_list = list(set(self.transactions["SYMBOL"]))
+            # self.start_date
+            self.start_date = self.transactions.index.min()
+            self._load_basedata()
+            self.history = None
+            logging.info(f"Data loaded from Pandas Dataframe {df}")
+
+        except Exception as e:
+            logging.error(f"Data could not be loaded from Pandas Dataframe {df}: {e} ")
+
+    def to_csv(self, csvfile, precision = None, selected_only=True):
         """
         write transations to csvfile
         Columns: NAME, VOLUME, PRICE, DATE, SYMBOL, 
@@ -120,7 +161,9 @@ class Portfolio:
         
         """
         try:
-            self.transactions.to_csv(csvfile, float_format=precision)
+
+            transactions = self.transactions.loc[self.transactions["selected"] == True] if selected_only else self.transactions
+            transactions.to_csv(csvfile, float_format=precision)
         except Exception as e:
             logging.error(f"transactions could not be written to CSV file {csvfile}: {e.with_traceback()} ")
         
@@ -154,7 +197,7 @@ class Portfolio:
         except Exception as e:
             logging.error(f"History could not be written to CSV file {csvfile}: {e.with_traceback()} ")
 
-    def load_history(self, start = None, end = None, aggregate_to = None, cleanup = False, symbols:list= None):
+    def load_history(self, start = None, end = None, aggregate_to = None, cleanup = False, symbols:list= None, selected_only=True):
         """
         computes history and saves to self.history
 
@@ -191,8 +234,11 @@ class Portfolio:
         
         self.history = pd.DataFrame({'Date': days})
         self.history = self.history.set_index('Date')
-           
-        for index, row in self.transactions.iterrows():
+        
+        transactions = self.transactions.loc[self.transactions["selected"] == True] if selected_only else self.transactions
+        # transactions = self.transactions
+
+        for index, row in transactions.iterrows():
             # filter only for symbols list
             if symbols is not None and row["SYMBOL"] not in symbols: continue 
 
@@ -226,14 +272,14 @@ class Portfolio:
             self.history[f'{symbol}_price_{index.date()}'] = ticker_df["PRICE"]
             self.history[f'{symbol}_price_{index.date()}'] = self.history[f'{symbol}_price_{index.date()}'].interpolate() 
 
-        self.aggregate_to(level = aggregate_to, symbols= symbols, cleanup = cleanup, inplace=True)
+        self.aggregate_to(level = aggregate_to, symbols= symbols, cleanup = cleanup, inplace=True, selected_only=selected_only)
         logging.info(f"loading history data done!")
     
-    def aggregate_to(self, level = None, symbols= None, cleanup = False, inplace=False):
+    def aggregate_to(self, level = None, symbols= None, cleanup = False, inplace=False, selected_only=True):
         if inplace == False: 
             aggregate = pd.DataFrame()
-        if level == "portfolio":                
-            cols={"price":[],"close":[], "volume":[]}
+        if level == "portfolio":
+            cols = {"price":[], "close":[], "high":[], "low":[], "volume":[]}
 
             filtered_history_columns =self.history.columns
             if symbols is not None:
@@ -249,7 +295,13 @@ class Portfolio:
                 if cleanup == True and inplace == True:
                     self.history = self.history.drop(cols[col_type], axis=1) 
         elif level == "symbol":
-            symbol_list=list(set(self.transactions["SYMBOL"])) if symbols is None else symbols
+            if selected_only == True:
+                symbol_list = list(set(self.transactions.loc[self.transactions["selected"]==True]["SYMBOL"]))
+            else:
+                symbol_list=list(set(self.transactions["SYMBOL"])) if symbols is None else symbols
+            if symbols is not None:
+                symbol_list = [sym for sym in symbol_list if sym in symbols]
+            
             for symbol in symbol_list:                
                 col_per_symbol={"price":[],"close":[], "volume":[]}
                 for col_type in col_per_symbol.keys(): 
@@ -296,9 +348,7 @@ class Portfolio:
         struct = Portfolio._set_structure(struct=transaction)
         self.transactions = pd.concat([self.transactions, struct])
         self._load_basedata(added_item = transaction)
-
-    def filter_history(self, symbols: list):
-        pass
+        # TODO extend self.symbol_list 
 
     def get_portfolio_tech_indicators(self, interval=20, symbols = None, inplace= True):
         if inplace == True: indicators=self.history
@@ -321,6 +371,7 @@ class Portfolio:
         
         if inplace == True:
             self.portfolio_tech_indicators=[col[len(self._prefix_portfolio_indicator):] for col in self.history.columns if col.startswith(self._prefix_portfolio_indicator)]
+            print(self.portfolio_tech_indicators)
             return
         else:
             return indicators

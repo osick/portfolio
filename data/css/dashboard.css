@@ -3,11 +3,13 @@
     padding-right: 1rem; 
 }
 
-[data-testid='stFileUploader'] {
+[data-testid='stFileUploader'], [data-testid='stButton']{
     margin:0;
-    padding:0;
-    font-weight: bold;
+    padding:0x;
+    background-color: #c0c0ff;
+    border-radius: 10px;
 }
+
 
 [data-testid='stFileUploader'] section > input + div {
     display:none;
@@ -24,15 +26,16 @@
     padding: 0;
 }
 
-[data-testid=stFileUploader] button {
-    background-color: white;
+[data-testid=stFileUploader] button{
+   
     font-weight: bold;
+    width: 100%;
+    line-break: strict;
 }
 
 
 [data-testid='stSidebarHeader'] {
-    float: right;
-    padding: 0;
+    padding:0;
     display:visible ;
 }
 
@@ -48,12 +51,23 @@
     color:blue;
 } 
 
+.stTabs  {
+    padding-left: 0rem;
+}
+
+.stTabs [data-baseweb="tab"] div p {
+    font-weight: bold;
+    font-size: 110%;
+}
 
 .stTabs [data-baseweb="tab"] {
-    margin-top: 20px;
-    height: 40px; 
+    width:14.2%;
+
+    z-index: 999999;
+    margin-top: 40px;
+    height: 30px; 
     white-space: pre-wrap; 
-    background-color: #ffffff; 
+    background-color: #e0e0e0; 
     border: 3px solid #d0d0d0;
     border-bottom-width: 0;
     color: #000000; 
@@ -63,8 +77,9 @@
 }
 
 .stTabs [aria-selected="true"] {
-    background-color: black; 
+    background-color: red; 
     color: #ffffff;
+    font-weight: bold;
 }
 
 span[data-baseweb="tag"] {
@@ -76,7 +91,7 @@ span[data-baseweb="tag"] {
 
 .stPlotlyChart { 
     border-radius: 6px; 
-    box-shadow: 0 8px 12px 0 rgba(0, 0, 0, 0.20), 0 6px 20px 0 rgba(0, 0, 0, 0.30); 
+    box-shadow: 0 8px 12px 0 rgba(0, 0, 0, 0.20), 0 6px 20px 0 rgba(0, 0, 0, 0.30);
 }
 
 [data-testid=stSidebar] {
@@ -87,9 +102,7 @@ span[data-baseweb="tag"] {
 
 .stButton>button{
     border-radius: 2px;
-    background-color: white;
     color: black;
-    font-size: 12px;
     border-radius: 4px;
     }
 
@@ -97,6 +110,10 @@ span[data-baseweb="tag"] {
         color: gray;
     }
     
+button[kind="primary"]{
+    background-color: lightgreen;
+    color: gray;
+}
 
 .stExpander details{
     border-width:2px ;
@@ -104,6 +121,13 @@ span[data-baseweb="tag"] {
 
 div[data-baseweb="select"] > * {
     border-radius:0
+}
+
+.stMainBlockContainer {
+    padding-top:0rem;
+    margin-top:0rem;
+    padding-left: 2rem;
+    padding-right: 2rem;
 }
 
 
@@ -115,4 +139,25 @@ div[data-baseweb="select"] > * {
 */
 
 /*Hack */
-.stAppHeader{display:none}
+
+.stAppHeader{
+    background-color: transparent;
+}
+
+button > div > p, .stFileUploader button{
+    font-size: 1rem !important;
+    word-break: keep-all !important;
+}
+
+
+
+/* HACK */
+.st-key-_uploader > div > section > button{
+    font-size: 0px !important;
+}
+
+/* HACK */
+.st-key-_uploader > div > section > button::before{
+    content: 'Load Transactions from CSV File';   
+    font-size: 1rem !important;
+}

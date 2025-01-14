@@ -67,8 +67,8 @@ def add_help():
         |------------|------------------------------------------------------| 
         | **NAME**   | arbitrary Identifier                                 |  
         | **AMOUNT** | Number of shares                                     |  
-        | **PRICE**    | The total price (in EUR)                             |   
-        | **DATE**  | Buying Day (no Time or timezone Info nescessary)     | 
+        | **PRICE**  | The total price (in EUR)                             |   
+        | **DATE**   | Buying Day (no Time or timezone Info nescessary)     | 
         | **SYMBOL** | The symbol of the share                              | 
     """
     with open("Readme.md") as fh:

@@ -6,39 +6,46 @@ import base64
 from dotenv import load_dotenv
 from openai import OpenAI
 import ollama
+import os
 
 from portfolio import logging
 
 class AI():
 
-    user_prompt = """
-    You are a Stock Trader specializing in Technical Analysis at a top financial institution and you are avoing higher risks and you have a long term mindset.
-    Analyze the stock chart's technical indicators and provide a buy/hold/sell recommendation.
-    Base your recommendation only on chart and the displayed technical indicators. 
-    First, provide the recommendation, then, provide your detailed reasoning.
-    Finally provied the expected target price for the stock. The Price forecast should be given for at least 2 - 3 months.
-    Your response should be given as correct markdown (smaller font)
-    """
-    
+    def __init__(self):
+        self.prompts ={"default":""}
+        with open(os.path.join("data","default.prompt"),"r") as fh:
+            self.prompts["default"] = fh.read()
+
     def ask(self, type, prompt:str = None , image_data = None):
-        prompt = AI.user_prompt if prompt is None else prompt
-        if type == "ChatGPT": 
+        prompt = self.prompts["default"] if prompt is None else prompt
+        if type == "chatgpt": 
             return self._ask_ChatGPT(prompt,image_data = image_data)
-        elif type == "Llama": 
-            return self._ask_Llama(prompt,image_data = image_data)
+        elif type == "llama" or type=="llava": 
+            return self._ask_Ollama(prompt,image_data = image_data, type=type)
         else:
             return ""
-            
-    def _ask_Llama(self, prompt,image_data):
+
+    def _ping_Llama(self):
         try:
-            messages = [{'role': 'user', 'content': prompt, 'images': image_data}]
-            response = ollama.chat(model='llama3.2-vision', messages=messages)
+            messages = [{'role': 'user', 'content': "what is the color of a rose?"}]
+            response = ollama.chat(model='llama3.2', messages=messages)
             return response["message"]["content"]
         except Exception as e:
             logging.error(f"Error in ask_Llama: {e}")
             return ""
 
-    def _ask_ChatGPT(self, prompt,image_data):
+    def _ask_Ollama(self, prompt:str,image_data, type):
+        try:
+            model ="llava" if type=="llava" else 'llama3.2-vision'
+            messages = [{'role': 'user', 'content': prompt, 'images': [image_data]}]
+            response = ollama.chat(model=model, messages=messages)
+            return response["message"]["content"]
+        except Exception as e:
+            logging.error(f"Error in ask_Llama: {e}")
+            return ""
+
+    def _ask_ChatGPT(self, prompt:str,image_data):
         try:
             load_dotenv()
             OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")

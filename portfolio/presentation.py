@@ -41,39 +41,43 @@ class Figure():
     def __init__(self,portfolio: Portfolio):
         self.portfolio = portfolio
 
-    @functools.cache
-    def fig(self, level="portfolio", primary_y_stretch:float=1.0, secondary_y_stretch:float=1.0, exclude:str = None, height:int = 600, sep="||"):
-        exclude = exclude.split(sep)
+    def fig(self, date_range:int = None, level="portfolio", primary_y_stretch:float=1.2, secondary_y_stretch:float=1.2, exclude:str = None, height:int = 500, sep="||"):
 
         self.y_axis={"primary_y":{"max":0, "min":0},"secondary_y":{"max":0, "min":0}}
         
         if level in ["portfolio","symbol"]: self.portfolio.aggregate_to(level=level, inplace=True)
 
         fig = make_subplots(specs=[[{"secondary_y": True}]])  
-        fig.update_layout(legend=dict(x=0, y=1.0, orientation='h', font=dict(family="Arial", size=10, color="#404040"), bordercolor="Black", bgcolor="#ffffff", borderwidth=0),)
+        fig.update_layout(legend=dict(x=0, y=1.15, orientation='h', font=dict(family="Arial", size=10, color="#404040"), bordercolor="Black", bgcolor="#ffffff", borderwidth=0),)
 
         indicators = Figure.indicators
+        data_set = self.portfolio.history
+        if date_range is not None:
+            data_set = self.portfolio.history.tail(date_range)
         if exclude is not None:
+            exclude = exclude.split(sep)
             indicators = {ind:indicators[ind] for ind in set(indicators.keys()) - set(exclude)} 
         for key, config in indicators.items():
             col = key
-            if col in self.portfolio.history.columns:
-                fig.add_trace(go.Scatter(x=self.portfolio.history.index, y=self.portfolio.history[col], mode='lines', name=config["name"], line=config["line"], fill="tonexty",), secondary_y=config["secondary_y"],)
+            #if col in self.portfolio.history.columns:
+            if col in data_set.columns:
+                fig.add_trace(go.Scatter(x=data_set.index, y=data_set[col], mode='lines', name=config["name"], line=config["line"], fill="tonexty",), secondary_y=config["secondary_y"],)
                 which_y = "secondary_y" if config["secondary_y"]==True else "primary_y"
-                self.y_axis[which_y]["min"] = min(self.y_axis[which_y]["min"], self.portfolio.history[col].min())
-                self.y_axis[which_y]["max"] = max(self.y_axis[which_y]["max"], self.portfolio.history[col].max())
+                self.y_axis[which_y]["min"] = min(self.y_axis[which_y]["min"], data_set[col].min())
+                self.y_axis[which_y]["max"] = max(self.y_axis[which_y]["max"], data_set[col].max())
 
 
         portfolio_tech_indicators = Figure.portfolio_tech_indicators
         if exclude is not None:
             portfolio_tech_indicators = {ind:portfolio_tech_indicators[ind] for ind in set(portfolio_tech_indicators.keys()) - set(exclude)} 
+        
         for key, config in portfolio_tech_indicators.items():
             col = f"{self.portfolio._prefix_portfolio_indicator}{key}"
             if col in self.portfolio.history.columns:
-                fig.add_trace(go.Scatter(x=self.portfolio.history.index, y=self.portfolio.history[col], mode='lines', name=config["name"],), secondary_y=config["secondary_y"],)
+                fig.add_trace(go.Scatter(x=data_set.index, y=data_set[col], mode='lines', name=config["name"],), secondary_y=config["secondary_y"],)
                 which_y = "secondary_y" if config["secondary_y"]==True else "primary_y"
-                self.y_axis[which_y]["min"] = min(self.y_axis[which_y]["min"], self.portfolio.history[col].min())
-                self.y_axis[which_y]["max"] = max(self.y_axis[which_y]["max"], self.portfolio.history[col].max())
+                self.y_axis[which_y]["min"] = min(self.y_axis[which_y]["min"], data_set[col].min())
+                self.y_axis[which_y]["max"] = max(self.y_axis[which_y]["max"], data_set[col].max())
 
 
         fig.update_xaxes(title_text="<b>History</b>")
@@ -91,19 +95,14 @@ class Figure():
 
         return fig
     
-
     @staticmethod
-    def chart_to_image(fig):
+    def fig_to_base64(fig):
         try:
-            if not os.path.exists("data"):
-                os.mkdir("data")
-            with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmpfile:
-                tmpfile_path = os.path.join("data", tmpfile.name)
-                fig.write_image(tmpfile_path)
-            with open(tmpfile_path, "rb") as image_file:
-                image_data = base64.b64encode(image_file.read()).decode('utf-8')
-            os.remove(tmpfile_path)
+            with tempfile.NamedTemporaryFile(suffix=".png", delete=True) as tmpfile:
+                fig.write_image(tmpfile.name)
+                with open(tmpfile.name, "rb") as image_file:
+                    image_data = base64.b64encode(image_file.read()).decode('utf-8')
             return image_data
         except Exception as e:
-            logging.error(f"Error saving chart to image: {e}")
+            logging.error(f"Error saving chart as base64 string: {e}")
             return None
