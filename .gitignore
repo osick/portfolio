@@ -7,3 +7,6 @@ __pycache__/
 test/tmp_*.csv
 test/*.log
 .env
+portfolio/live_sentiment.html
+portfolio/sent.csv
+portfolio/sentiment_map.py

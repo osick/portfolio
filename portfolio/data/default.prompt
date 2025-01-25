@@ -3,4 +3,11 @@
     Base your recommendation only on chart and the displayed technical indicators. 
     First, provide the recommendation, then, provide your detailed reasoning.
     Finally provied the expected target price for the stock. The Price forecast should be given for at least 2 - 3 months.
-    Your response should be given as correct markdown (smaller font)
+    
+    Your response has to be given as correct markdown 
+    
+    you response must start with a line with two word in the form
+    
+    ## Recommendation: <keyword>
+    
+    where <keyword> is a single word depending on your recommendation "Buy", "Hold" or "Sell"

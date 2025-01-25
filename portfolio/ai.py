@@ -14,7 +14,7 @@ class AI():
 
     def __init__(self):
         self.prompts ={"default":""}
-        with open(os.path.join("data","default.prompt"),"r") as fh:
+        with open(os.path.join(os.path.dirname(__file__),"data","default.prompt"),"r") as fh:
             self.prompts["default"] = fh.read()
 
     def ask(self, type, prompt:str = None , image_data = None):

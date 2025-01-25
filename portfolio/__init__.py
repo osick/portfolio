@@ -5,7 +5,7 @@ from datetime import datetime
 import logging
 import sys
 from prophet import Prophet
-
+import json
 from .ticker import _get_history_ticker, _get_rates, _get_ticker_info
 
 
@@ -88,6 +88,12 @@ class Portfolio:
         
         Raises
         -------
+
+        Example
+        -------
+
+        NAME,VOLUME,PRICE,DATE,SYMBOL
+        AMUNDI MSCI WLD,1,300,01.01.2023,CM9.PA
         
         """
         try:
@@ -371,7 +377,6 @@ class Portfolio:
         
         if inplace == True:
             self.portfolio_tech_indicators=[col[len(self._prefix_portfolio_indicator):] for col in self.history.columns if col.startswith(self._prefix_portfolio_indicator)]
-            print(self.portfolio_tech_indicators)
             return
         else:
             return indicators
@@ -410,6 +415,7 @@ class Portfolio:
                 info = {"SYMBOL":row["SYMBOL"]}
                 for k in self.selected_info_fields:
                     info[k] = ticker_info.get(k,None)
+                info["amount"] = self.transactions.loc[self.transactions["SYMBOL"]==row["SYMBOL"]]["VOLUME"].sum(axis=0, numeric_only=True)
                 infos.append(info)
             self.basedata = pd.DataFrame(infos)
             self._load_currencies()

@@ -33,6 +33,10 @@
     line-break: strict;
 }
 
+[data-testid='stSidebar']{
+    margin-top: 5rem;
+}
+
 
 [data-testid='stSidebarHeader'] {
     padding:0;
@@ -61,10 +65,9 @@
 }
 
 .stTabs [data-baseweb="tab"] {
-    width:14.2%;
-
-    z-index: 999999;
-    margin-top: 40px;
+    width:20%;
+    margin-left:2%;
+    margin-right:2%;
     height: 30px; 
     white-space: pre-wrap; 
     background-color: #e0e0e0; 
@@ -89,13 +92,13 @@ span[data-baseweb="tag"] {
     padding:6px; 
 }  
 
-.stPlotlyChart { 
+/* .stPlotlyChart { 
     border-radius: 6px; 
     box-shadow: 0 8px 12px 0 rgba(0, 0, 0, 0.20), 0 6px 20px 0 rgba(0, 0, 0, 0.30);
-}
+} */
 
 [data-testid=stSidebar] {
-    background-color: #fff9ff;
+    background-color: #ffffff;
     border-right: 2px solid #c0c0c0;
 }
 
@@ -124,7 +127,7 @@ div[data-baseweb="select"] > * {
 }
 
 .stMainBlockContainer {
-    padding-top:0rem;
+    padding-top:4rem;
     margin-top:0rem;
     padding-left: 2rem;
     padding-right: 2rem;
@@ -149,6 +152,9 @@ button > div > p, .stFileUploader button{
     word-break: keep-all !important;
 }
 
+[data-testid="stMetricValue"] > div{
+    font-size: 2rem;
+}
 
 
 /* HACK */
@@ -157,7 +163,75 @@ button > div > p, .stFileUploader button{
 }
 
 /* HACK */
-.st-key-_uploader > div > section > button::before{
-    content: 'Load Transactions from CSV File';   
+div[class^="st-key-upload_"] > div > section > button::before{
+    content: 'CSV';   
     font-size: 1rem !important;
 }
+
+
+.stSpinner, .stSpinner > *{
+    background-color: yellow;
+}
+
+/*from https://discuss.streamlit.io/t/how-to-get-click-action-in-a-text/39441/3 */
+
+    button[kind="tertiary"] {
+        background: none!important;
+        background-color: transparent;
+        border: none;
+        padding: 0!important;
+        color: black !important;
+        text-decoration: none;
+        cursor: pointer;
+        border: none !important;
+    }
+    button[kind="tertiary"]:hover {
+        text-decoration: none;
+        color: black !important;
+    }
+    button[kind="tertiary"]:focus {
+        outline: none !important;
+        box-shadow: none !important;
+        color: black !important;
+    }
+
+    [data-testid="stButton"] {
+        background-color: transparent;
+    }
+
+
+    .sectiontitle_1 {
+        position: relative;
+        display: inline-block;
+        width: 100%;
+        text-align:left;
+        margin-bottom: 0px;
+        font-variant: small-caps;
+    }
+    .sectiontitle_1::before {
+       content: '';
+       position: absolute;
+       background-color: #2020fd;
+       width: 100%;
+       height: 5px;
+       bottom: 1px;
+       left: 0;
+       right: 0;
+       margin-bottom: 10px;
+    }
+
+    .sectiontitle_2::before {
+       background-color: #e0e0e0;
+       height: 0px;
+    }
+
+    .stMetric{
+        background-color: #e0e0e0;
+        border-left: 10px #40a0ff solid;
+        zoom: 80%;
+    }
+
+    
+    [data-testid="stMetricValue"] div{
+        font-weight: bold;
+    }
