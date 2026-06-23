@@ -6,10 +6,12 @@ from transformers import pipeline
 import logging
 import yfinance as yf
 import json
+import numpy as np
 import plotly.express as px
 import nltk
 nltk.downloader.download('vader_lexicon')
 from nltk.sentiment.vader import SentimentIntensityAnalyzer
+from datetime import datetime
 import crawl4ai
 
 
@@ -31,16 +33,26 @@ class Sentiment():
 
     def init_data(self):
         if self._init: return
-        data={'Industry': [], 'Price': [], 'Shares': []}
+        data={'Industry': [], 'Price': [], 'Shares': [], "Sector":[]}
         tickers =[]
         for ticker,shares in self.ticker.items():
             tickerdata = yf.Ticker(ticker)
-            data["Price"].append(tickerdata.info.get("regularMarketPreviousClose",0))
-            data["Industry"].append(tickerdata.info.get("industry",""))        
+            print(f"{ticker = }")
+            price = tickerdata.info.get("currentPrice",0.0)
+            print(ticker,price)
+            if price == 0.0: 
+                close = tickerdata.history(interval="1m", period = "1d")
+                if close.shape[0]>0: 
+                    price= close["Close"][-1] if close["Close"][-1]>0 else 0.1
+            print(ticker,price)
+
+            data["Price"].append(price)
+            data["Sector"].append(tickerdata.info.get("sector","No Sector"))        
+            data["Industry"].append(tickerdata.info.get("industry","No Industry"))        
             data["Shares"].append(shares)
             tickers.append(ticker)
         self.ticker_info = pd.DataFrame(data=data, index = tickers)
-        self.ticker_info['Stockvalue'] = self.ticker_info['Price']*self.ticker_info['Shares']
+        self.ticker_info["Stockvalue"] = self.ticker_info['Price']*self.ticker_info["Shares"]
         self.load_news()
         self._init = True
 
@@ -60,15 +72,17 @@ class Sentiment():
         self.news_df=pd.DataFrame({"Date":[], "Title":[], "Link":[], "Source":[], "Ticker":[]})
         if self.ticker == {}: print("load_news(): no ticker found!"); return
         if source =="finviz":
-            try:
-                for ticker in self.ticker.keys():
+            for ticker in self.ticker.keys():
+                try:
                     stock = finvizfinance(ticker)
                     news = stock.ticker_news()
                     news["Ticker"]=ticker
                     self.news_df = pd.concat([self.news_df, news], axis=0, ignore_index=True,)
-                self.news_df['Date'] = pd.to_datetime(self.news_df['Date'])
-            except Exception as e:
-                print(f"Error loading finviz news from {source} for {self.ticker=} Error: {e}")
+                except Exception as e:
+                    print(f"{ticker} not found in finvizfinance: {e}")
+                    news = pd.DataFrame({"Date":[datetime.today().date()], "Title":["Neutral"], "Link":["N/A"], "Source":["N/A"], "Ticker":[ticker]})
+                    self.news_df = pd.concat([self.news_df, news], axis=0, ignore_index=True,)
+            self.news_df['Date'] = pd.to_datetime(self.news_df['Date'])
         else:
             try:
                 pass
@@ -76,7 +90,7 @@ class Sentiment():
                 print(f"Error loading news from {source} for {self.ticker=} Error: {e}")
 
 
-    def score_data(self, model="nltk",threshold=0.8) -> None:
+    def score_data(self, model="nltk") -> None:
         if model not in Sentiment.sentiment_models.keys(): return    
         try:
             if model == "nltk":
@@ -85,11 +99,18 @@ class Sentiment():
                 scores_df = self._score_data_by_ai(model=model)
             scores_df = self.news_df.join(scores_df, rsuffix=f'_{model}')
             mean_scores = scores_df.groupby(['Ticker']).mean(numeric_only=True)
-            self.ticker_info = self.ticker_info.drop([f"neu_{model}",f"pos_{model}",f"neg_{model}","Ticker"], errors="ignore", axis=1)
+            #self.ticker_info = self.ticker_info.drop([f"neu_{model}",f"pos_{model}",f"neg_{model}","Ticker"], errors="ignore", axis=1)
             self.ticker_info = pd.concat([self.ticker_info, mean_scores], axis =1)
+            #self.ticker_info.reset_index(inplace=True)
+
         except Exception as e:
             logging.error(f"Error in score_data() with {model = }: {e}")
 
+
+    def total_sentiment(self,model:str):
+        total_stock_value=self.ticker_info["Stockvalue"].sum()
+        weighted_sentiment=(self.ticker_info[f"compound_{model}"]*self.ticker_info["Stockvalue"]).sum()/total_stock_value
+        return round(weighted_sentiment,ndigits=4)
 
     def _score_data_by_nlp(self, model="nltk", threshold=0.8) -> pd.DataFrame:
         """
@@ -146,29 +167,35 @@ class Sentiment():
             logging.error(f"Error in _score_data_by_ai: {e}")
             return pd.DataFrame([{f"neg_{model}":0,f"neu_{model}":0,f"pos_{model}":0,f"compound_{model}":0}]*len(results))
     
-    def get_treemap(self) -> px.treemap:
+    def get_treemap(self,model) -> px.treemap:
+        #columns=['Price', 'neg'+f"_{model}", 'neu'+f"_{model}", 'pos'+f"_{model}", 'compound'+f"_{model}"]
+        print("----------------------------------------\n", self.ticker_info.columns, "\n--------------------------------------------")
+        info = self.ticker_info.reset_index()
+        info.rename({"index":"Ticker"}, inplace=True, axis=1)
+        info["Stockvalue"]+=1
         fig = px.treemap(
-            self.ticker_info, 
-            path=[px.Constant("Industries"), "Industry", "ticker"], 
-            values='Stockvalue', 
-            color='Score', 
-            hover_data=['Price', 'neg', 'neu', 'neg', 'Score'], 
-            color_continuous_scale=['#FF0000', "#000000", '#00FF00'], 
-            color_continuous_midpoint=0)
-        fig.data[0].customdata = self.ticker_info[['Price', 'neg', 'neu', 'neg', 'Score']].round(3)
-        fig.data[0].texttemplate = "%{label}<br>%{customdata[4]}"
-        fig.update_traces(textposition="middle center")
-        fig.update_layout(margin = dict(t=30, l=10, r=10, b=10), font_size=20)
+            info, 
+            path=[px.Constant("Sectors"), "Sector", "Industry","Ticker"], 
+            values = "Stockvalue",
+            color = f"compound_{model}",
+            color_continuous_scale=['#FF0000', "#000000", '#00FF00'],#"RdYlGn",
+            #range_color=[-1,1],
+            #color_continuous_midpoint=np.average(info[f"compound_{model}"], weights=info["Stockvalue"]),
+        )
+        fig.update_traces(marker=dict(cornerradius=5))
+        fig.update_layout(margin = dict(t=25, l=25, r=25, b=25))
         return fig
 
 
 if __name__=="__main__":
 
-    print("------------------------------------------------------------------")
-    tickers ={"AAPL":10, "MSFT":20, "GOOG":100, "TSLA":12}
-    sentiment = Sentiment(tickers)
-    sentiment.init_data()
-    
-    for model in sentiment.sentiment_models:
-        sentiment.score_data(model=model)
-    print(sentiment.ticker_info)
+    _model ="finBERT"
+
+    tickers = {"AAPL":10, 'KO': 30.0, "MSFT":20, "GOOG":100, "TSLA":12,"F":250, "WMT":30, "BABA":300, "AMZN":20, 'ASML': 3.0, }
+    tickers = {'MSFT': 15.0, 'KO': 30.0, 'NVDA': 50.0, 'ASML': 3.0, 'RYCEF': 500.0, 'CM9.PA': 33.1008, 'LLY': 6.0, 'GOOGL': 40.0, 'ARM': 40.0, "ALIZF":11}
+    _sentiment = Sentiment(tickers)
+    _sentiment.init_data()
+    _sentiment.score_data(model=_model)
+    print(_sentiment.ticker_info)
+    fig=_sentiment.get_treemap(model=_model)
+    fig.show()

@@ -92,10 +92,10 @@ span[data-baseweb="tag"] {
     padding:6px; 
 }  
 
-/* .stPlotlyChart { 
+.stPlotlyChart { 
     border-radius: 6px; 
     box-shadow: 0 8px 12px 0 rgba(0, 0, 0, 0.20), 0 6px 20px 0 rgba(0, 0, 0, 0.30);
-} */
+}
 
 [data-testid=stSidebar] {
     background-color: #ffffff;

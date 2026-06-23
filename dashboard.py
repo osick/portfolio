@@ -92,6 +92,7 @@ def load_portfolio(_portfolio:Portfolio, reset = True, uploader = None, df = Non
     _portfolio._init_data()
     if uploader is not None:
         _portfolio.from_csv(st_uploader)
+        print(_portfolio.transactions.dtypes)
         calc_portfolio(_portfolio)
     if df is not None:
         if "file_uploader_key" in  st.session_state: st.session_state["file_uploader_key"] += 1
@@ -164,42 +165,37 @@ if __name__ == "__main__":
     with portfolio_container:
         col_metrics,col_chart=st.columns([2,5])
         with col_metrics:
-            section_title("Metrics and Chart",2)
+            #section_title("Metrics and Chart",2)
             m1,m2,m3 = st.columns(3)
             m4,m5,m6 = st.columns(3)
 
         
-    section_title("Analysis")    
-    t1,t2,t3 = st.columns([1,50,1])
-    with t2:
-        #analysis_container = st.expander("History, Forecast, Sentiment and AI")
-        analysis_container = st.container()
-        with analysis_container:
-            section_title("Transaction List",2)
-            exp_data = st.container(border=False)
-            with exp_data:    
-                trans_col, sym_col = st.columns([7,1])
-                with trans_col: st.write(" ")
-                with sym_col: st.write(" ")
+    #section_title("Analysis")    
+    # t1,t2,t3 = st.columns([1,50,1])
+    # with t2:
+    #analysis_container = st.expander("History, Forecast, Sentiment and AI")
+    analysis_container = st.container()
+    with analysis_container:
+        exp_data = st.expander("Transaction List",expanded=False)
+        with exp_data:    
+            trans_col, sym_col = st.columns([7,1])
+            with trans_col: st.write(" ")
+            with sym_col: st.write(" ")
 
-            section_title("History",2)
-            with st.container(border=False):
-                st_cont_history=st.container()
-                with st_cont_history: st.write(" ")
-                st_cont_chart = st.container()
-                with st_cont_chart: st.write(" ")
+        with st.expander("History",expanded=False):
+            st_cont_history=st.container()
+            with st_cont_history: st.write(" ")
+            st_cont_chart = st.container()
+            with st_cont_chart: st.write(" ")
 
-            section_title("Forecast (TBD)",2)
-            st_cont_forecast=st.container(border=False)
-            with st_cont_forecast: st.write(" ")
+        st_cont_forecast=st.expander("Forecast (TBD)",expanded=False)
+        with st_cont_forecast: st.write(" ")
 
-            section_title("Sentiment",2)
-            st_cont_sentiment = st.container(border=False)
-            with st_cont_sentiment: st.write(" ")
-            
-            section_title("AI Analysis",2)
-            st_cont_ai = st.container(border=False)
-            with st_cont_ai: st.write(" ")
+        st_cont_sentiment = st.expander("Sentiment",expanded=False)
+        with st_cont_sentiment: st.write(" ")
+        
+        st_cont_ai = st.expander("AI Analysis",expanded=False)
+        with st_cont_ai: st.write(" ")
         
     if st_uploader or st_load_ticker or analyze_btn:
         with st_commands:
@@ -271,17 +267,9 @@ if __name__ == "__main__":
             
             with st.spinner(f"Sentiment Analysis..."):
                 if "sentiment" not in st.session_state or  st.session_state.sentiment is None:
-                    sentiment = Sentiment([st_ticker_text])
-                    st.session_state.sentiment = sentiment
-                    # if st_ticker_text.strip() !="":
-                    #     sentiment.eval()
-                    #     st.session_state.sentiment_value = sentiment.sentiment["POSITIVE"] - sentiment.sentiment["NEGATIVE"]
-                    #     total = sentiment.news_df.shape[0]
-                    #     st.session_state.sentiment = sentiment
-                    #     if abs(st.session_state.sentiment_value)<0.1* total: st.session_state.sentiment_result = "Neutral"
-                    #     elif st.session_state.sentiment_value > 0: st.session_state.sentiment_result = "Positive"
-                    #     elif st.session_state.sentiment_value < 0: st.session_state.sentiment_result = "Negative"
-                    
+                    my_sentiment = Sentiment([st_ticker_text])
+                    st.session_state.sentiment = my_sentiment
+
             with st.spinner(f"Forecast..."):
                 time.sleep(2.0)
                 plus = 100
@@ -295,19 +283,24 @@ if __name__ == "__main__":
             st.write(st.session_state.forecast)            
         
         with st_cont_sentiment:
-            my_sentiment = Sentiment({row["SYMBOL"]:row["amount"] for _, row in st.session_state.portfolio.basedata.iterrows()})
-            fig_sent = my_sentiment.get_treemap()
-            st.session_state.sentiment.news_df = my_sentiment.news_df
-            st.plotly_chart(fig_sent)
-            st.dataframe(st.session_state.sentiment.news_df, hide_index=True, column_config={"Date":st.column_config.DateColumn("Date", format="DD.MM.YYYY"), "Title": "Title", "sentiment":"Sentiment", "Link": st.column_config.LinkColumn("Link"), "Source": "Source", "ticker": "Ticker"}, use_container_width=True)
+            if "portfolio" in st.session_state:
+                _model="nltk"
+                my_sentiment = Sentiment({row["SYMBOL"]:row["amount"] for _, row in st.session_state.portfolio.basedata.iterrows()})
+                st.session_state.sentiment = my_sentiment
+                st.session_state.sentiment.init_data()
+                st.session_state.sentiment.score_data(model=_model)
+                st.dataframe(st.session_state.sentiment.ticker_info)
+                fig_sent = st.session_state.sentiment.get_treemap(_model)
+                st.plotly_chart(fig_sent)
     
         with m4:
             forc_metric = st.metric("Forecast (TBD)",value=st.session_state.forecast, delta=st.session_state.forecast_delta, border=True)
         
         with m5:
-            sent_metric = st.metric("Sentiment",value=st.session_state.sentiment_result, delta=st.session_state.sentiment_value, border=True)
+            st.session_state.sentiment_result = st.session_state.sentiment.total_sentiment(_model)
+            sent_metric = st.metric("Sentiment",value=st.session_state.sentiment_result, delta=f"by {_model.upper()}", border=True)
         
         with m6:
-            ai_metric   = st.metric("AI Recommendation",value=st.session_state.recommendation, delta=f"by {ai_type}", border=True, delta_color="off")
+            ai_metric   = st.metric("AI Recommendation",value=st.session_state.recommendation, delta=f"by {ai_type.upper()}", border=True, delta_color="off")
 
     st.markdown(nav_header, unsafe_allow_html=True)

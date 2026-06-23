@@ -10,3 +10,4 @@ test/*.log
 portfolio/live_sentiment.html
 portfolio/sent.csv
 portfolio/sentiment_map.py
+venv/
